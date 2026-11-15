@@ -62,7 +62,12 @@ async function main() {
       })
     : 0;
 
+  // 5. Item condition "Used" that the old pipeline stamped on every item when a portal gave none
+  const usedWhere = { condition: 'Used', auction: { source: { code: { not: 'MOCK' } } } };
+  const defaultedCondition = await prisma.auctionItem.count({ where: usedWhere });
+
   console.table({
+    'Items with defaulted "Used" condition to clear': defaultedCondition,
     'Invented catalog auctions to delete': fabricated,
     'Rows with estimated price/EMD/increment to clear': estimated,
     'Rows with price 0 to set as "not disclosed"': zeroPrice,
@@ -94,6 +99,7 @@ async function main() {
       });
     }
     await tx.auction.updateMany({ where: { startPrice: 0 }, data: { startPrice: null } });
+    if (defaultedCondition > 0) await tx.auctionItem.updateMany({ where: usedWhere, data: { condition: null } });
     if (bidsId && unspecifiedLocationId) {
       await tx.auction.updateMany({
         where: { sourceId: bidsId, location: { state: 'Delhi', city: 'New Delhi' } },

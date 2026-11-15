@@ -5,33 +5,15 @@ import { adminService } from '../services/adminService';
 import { auctionService } from '../services/auctionService';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { demoLoginEnabled } from '../config/demo';
 import { SourceBadge } from '../components/common/SourceBadge';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend
-} from 'recharts';
-import {
-  ShieldCheck,
-  RefreshCw,
-  Activity,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Layers,
-  BarChart3,
-  Lock,
-  Play,
-  Database
-} from 'lucide-react';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Panel } from '../components/ui/Panel';
+import { AnimatedNumber } from '../components/motion/AnimatedNumber';
+import { Stagger, StaggerItem } from '../components/motion/Reveal';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
+import { ShieldCheck, RefreshCw, Activity, CheckCircle2, XCircle, Clock, BarChart3, Lock, Play } from 'lucide-react';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -39,9 +21,18 @@ export const AdminPage: React.FC = () => {
   const { user, loginAsDemo } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#94a3b8' : '#64748b';
+  const tipStyle = {
+    backgroundColor: isDark ? '#0f172a' : '#ffffff',
+    border: '1px solid ' + (isDark ? '#334155' : '#e2e8f0'),
+    borderRadius: 10,
+    fontSize: 12,
+    color: isDark ? '#e2e8f0' : '#0f172a'
+  };
   const [syncingSource, setSyncingSource] = useState<string | null>(null);
 
-  // Fetch Admin Dashboard Overview
   const { data: adminData, isLoading: isAdminLoading } = useQuery({
     queryKey: ['adminDashboard'],
     queryFn: () => adminService.getDashboard(),
@@ -49,7 +40,6 @@ export const AdminPage: React.FC = () => {
     refetchInterval: 30000
   });
 
-  // Fetch Global Stats for Charts
   const { data: statsData } = useQuery({
     queryKey: ['adminGlobalStats'],
     queryFn: () => auctionService.getStats(),
@@ -57,7 +47,6 @@ export const AdminPage: React.FC = () => {
     staleTime: 60000
   });
 
-  // Trigger Scrape Mutation
   const triggerScrapeMutation = useMutation({
     mutationFn: (sourceCode: string) => adminService.triggerScrape(sourceCode),
     onMutate: (sourceCode) => {
@@ -65,11 +54,7 @@ export const AdminPage: React.FC = () => {
     },
     onSuccess: (res, sourceCode) => {
       if (res.status === 'FAILED') {
-        showToast({
-          type: 'error',
-          title: `Ingestion failed: ${sourceCode}`,
-          message: res.errorMessage || 'The source returned an error.'
-        });
+        showToast({ type: 'error', title: `Ingestion failed: ${sourceCode}`, message: res.errorMessage || 'The source returned an error.' });
       } else {
         showToast({
           type: res.status === 'PARTIAL' ? 'warning' : 'success',
@@ -82,21 +67,15 @@ export const AdminPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['auctionStats'] });
     },
     onError: (err: any) => {
-      showToast({
-        type: 'error',
-        title: 'Scraper error',
-        message: err?.response?.data?.error?.message || err?.message || 'Unknown error'
-      });
+      showToast({ type: 'error', title: 'Scraper error', message: err?.response?.data?.error?.message || err?.message || 'Unknown error' });
     },
     onSettled: () => {
       setSyncingSource(null);
     }
   });
 
-  // Toggle Source Mutation
   const toggleSourceMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      adminService.toggleSource(id, enabled),
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => adminService.toggleSource(id, enabled),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminDashboard'] });
     }
@@ -105,30 +84,21 @@ export const AdminPage: React.FC = () => {
   if (!user || user.role !== 'ADMIN') {
     return (
       <div className="max-w-md mx-auto py-16 text-center space-y-4">
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl inline-block text-sky-600 dark:text-sky-400">
-          <Lock className="w-8 h-8 mx-auto" />
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-sky-500 to-violet-500 text-white flex items-center justify-center shadow-lg shadow-sky-500/30">
+          <Lock className="w-7 h-7" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Administrator Access Required</h2>
-        <p className="text-xs text-slate-600 dark:text-slate-400">
-          The Scraper Pipeline Controller & Health Dashboard is restricted to verified administrators.
-        </p>
+        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Administrator access required</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-400">The ingestion controller and health dashboard is restricted to administrators.</p>
         <div className="pt-2 flex justify-center gap-3">
-          {demoLoginEnabled && (
-            <button
-              onClick={() => loginAsDemo('ADMIN')}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-900/30"
-            >
-              One-Click Login as Demo Admin
-            </button>
-          )}
           {!user && (
-            <Link
-              to="/login"
-              state={{ from: { pathname: '/admin' } }}
-              className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold transition"
-            >
-              Sign In
+            <Link to="/login" state={{ from: { pathname: '/admin' } }} className="btn-primary">
+              Sign in
             </Link>
+          )}
+          {demoLoginEnabled && (
+            <button onClick={() => loginAsDemo('ADMIN')} className="btn-ghost border border-slate-200 dark:border-white/10">
+              Demo admin
+            </button>
           )}
         </div>
       </div>
@@ -139,248 +109,188 @@ export const AdminPage: React.FC = () => {
   const recentJobs = adminData?.recentJobs || [];
   const metrics = adminData?.metrics;
 
+  const metricCards = metrics
+    ? [
+        { label: 'Indexed notices', value: metrics.totalAuctions, tone: 'text-slate-900 dark:text-white' },
+        { label: 'Live now', value: metrics.liveAuctions, tone: 'text-emerald-600 dark:text-emerald-400' },
+        { label: 'Registered users', value: metrics.totalUsers, tone: 'text-sky-600 dark:text-sky-400' },
+        { label: 'Active alerts', value: metrics.totalAlerts, tone: 'text-amber-600 dark:text-amber-400' }
+      ]
+    : [];
+
   return (
-    <div className="space-y-8 pb-16">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-sky-500/15 text-sky-600 dark:text-sky-400 rounded-2xl">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Admin & Scraper Health Control</h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Monitor active data adapters, trigger manual batch ingestions, and inspect ingestion logs.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['adminDashboard'] })}
-            className="px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh Status
+    <div className="space-y-6 pb-16">
+      <PageHeader
+        icon={<ShieldCheck className="w-6 h-6" />}
+        eyebrow="Admin"
+        title="Ingestion control"
+        description="Monitor adapters, trigger manual syncs and inspect job logs."
+        tone="from-sky-500 to-violet-500"
+        actions={
+          <button onClick={() => queryClient.invalidateQueries({ queryKey: ['adminDashboard'] })} className="btn-ghost border border-slate-200 dark:border-white/10">
+            <RefreshCw className={`w-4 h-4 ${isAdminLoading ? 'animate-spin' : ''}`} /> Refresh
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Metrics Row */}
       {metrics && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl">
-            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">Total Indexed Auctions</div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{metrics.totalAuctions.toLocaleString('en-IN')}</div>
-          </div>
-          <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl">
-            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">Live Auctions</div>
-            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{metrics.liveAuctions.toLocaleString('en-IN')}</div>
-          </div>
-          <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl">
-            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">Registered Users</div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{metrics.totalUsers}</div>
-          </div>
-          <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl">
-            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">Active User Alerts</div>
-            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">{metrics.totalAlerts}</div>
-          </div>
-        </div>
+        <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-4" gap={0.06} immediate>
+          {metricCards.map((c) => (
+            <StaggerItem key={c.label}>
+              <div className="glass-card rounded-2xl p-5">
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{c.label}</div>
+                <div className={`mt-1 text-3xl font-extrabold font-mono ${c.tone}`}>
+                  <AnimatedNumber value={c.value} />
+                </div>
+              </div>
+            </StaggerItem>
+          ))}
+        </Stagger>
       )}
 
-      {/* Provider Status & Manual Triggers */}
-      <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            Registered Data Providers & Adapters
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Panel title="Data providers" icon={<Activity className="w-4 h-4" />}>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {sources.map((src) => {
             const isHealthy = src.health?.healthy ?? true;
             const isSyncing = syncingSource === src.code;
-
             return (
-              <div
-                key={src.id}
-                className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4"
-              >
+              <div key={src.id} className="p-4 rounded-2xl border border-slate-200/70 dark:border-white/[0.07] bg-slate-900/[0.02] dark:bg-white/[0.03] flex flex-col justify-between gap-4">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <SourceBadge code={src.code} />
-                    <span
-                      className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
-                        isHealthy ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                      }`}
-                    >
+                    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${isHealthy ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                       {isHealthy ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                      {isHealthy ? 'Healthy' : 'Error / Offline'}
+                      {isHealthy ? 'Healthy' : 'Offline'}
                     </span>
                   </div>
-
-                  <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">{src.name}</div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2">
-                    {src.health?.message || src.description || 'Public adapter connector.'}
-                  </p>
-
-                  <div className="text-[11px] text-slate-500 font-mono space-y-0.5">
-                    <div>{src.code === 'GEM_BIDS' ? 'Bids in DB:' : 'Auctions in DB:'} <span className="text-slate-700 dark:text-slate-300 font-bold">{src.auctionCount}</span></div>
+                  <div className="font-bold text-sm text-slate-900 dark:text-slate-100">{src.name}</div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2">{src.health?.message || src.description || 'Public adapter connector.'}</p>
+                  <div className="text-[11px] text-slate-500 font-mono flex gap-4">
+                    <span>
+                      {src.code === 'GEM_BIDS' ? 'Bids' : 'Notices'}: <b className="text-slate-800 dark:text-slate-200">{src.auctionCount}</b>
+                    </span>
                     {src.health?.responseTimeMs !== undefined && (
-                      <div>Latency: <span className="text-slate-700 dark:text-slate-300">{src.health.responseTimeMs}ms</span></div>
+                      <span>
+                        Latency: <b className="text-slate-800 dark:text-slate-200">{src.health.responseTimeMs}ms</b>
+                      </span>
                     )}
                   </div>
                 </div>
-
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                <div className="pt-3 border-t border-slate-200/70 dark:border-white/[0.06] flex items-center justify-between gap-2">
                   <button
+                    role="switch"
+                    aria-checked={src.enabled}
+                    aria-label={`${src.enabled ? 'Disable' : 'Enable'} ${src.name}`}
                     onClick={() => toggleSourceMutation.mutate({ id: src.id, enabled: !src.enabled })}
-                    className={`px-2.5 py-1 text-[11px] rounded-lg border font-medium ${
-                      src.enabled
-                        ? 'border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-500 bg-white dark:bg-slate-900'
-                    }`}
+                    className="flex items-center gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-300"
                   >
+                    <span className={`relative w-9 h-5 rounded-full transition-colors ${src.enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${src.enabled ? 'translate-x-4' : ''}`} />
+                    </span>
                     {src.enabled ? 'Enabled' : 'Disabled'}
                   </button>
-
-                  <button
-                    onClick={() => triggerScrapeMutation.mutate(src.code)}
-                    disabled={isSyncing}
-                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50"
-                  >
-                    {isSyncing ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Play className="w-3.5 h-3.5" />
-                    )}
-                    Run Ingestion
+                  <button onClick={() => triggerScrapeMutation.mutate(src.code)} disabled={!!syncingSource} className="btn-primary !px-3 !py-1.5 !text-xs">
+                    {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                    {isSyncing ? 'Running...' : 'Run sync'}
                   </button>
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </Panel>
 
-      {/* Analytics Charts (Recharts) */}
       {statsData && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 1: Auctions by Source */}
-          <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              Auctions by Source Portal
-            </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Panel title="Notices by source" icon={<BarChart3 className="w-4 h-4" />}>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={statsData.bySource}>
-                  <XAxis dataKey="code" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }} />
+                  <XAxis dataKey="code" stroke={axisColor} fontSize={11} tickLine={false} />
+                  <YAxis stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tipStyle} cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)' }} />
                   <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Panel>
 
-          {/* Chart 2: Status Distribution */}
-          <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-              <Activity className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              Auctions by Lifecycle Status
-            </h3>
+          <Panel title="Notices by status" icon={<Activity className="w-4 h-4" />}>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={statsData.byStatus}
-                    dataKey="count"
-                    nameKey="status"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label
-                  >
-                    {statsData.byStatus.map((entry, index) => (
+                  <Pie data={statsData.byStatus} dataKey="count" nameKey="status" cx="50%" cy="50%" innerRadius={50} outerRadius={82} paddingAngle={2} stroke="none">
+                    {statsData.byStatus.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }} />
-                  <Legend />
+                  <Tooltip contentStyle={tipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Panel>
         </div>
       )}
 
-      {/* Scrape Jobs History Log Table */}
-      <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Clock className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-            Recent Ingestion & Scrape Job Logs
-          </h3>
-        </div>
-
+      <Panel title="Recent ingestion jobs" icon={<Clock className="w-4 h-4" />} bodyClassName="!p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
-            <thead className="bg-slate-50 dark:bg-slate-950/80 text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
-              <tr>
-                <th className="py-3 px-3">Source</th>
-                <th className="py-3 px-3">Started At</th>
-                <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3">Found</th>
-                <th className="py-3 px-3">Created</th>
-                <th className="py-3 px-3">Updated</th>
-                <th className="py-3 px-3">Failed</th>
-                <th className="py-3 px-3">Notes / Errors</th>
+            <thead className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <tr className="border-b border-slate-200/70 dark:border-white/[0.06]">
+                <th className="py-3 px-5 font-semibold">Source</th>
+                <th className="py-3 px-3 font-semibold">Started</th>
+                <th className="py-3 px-3 font-semibold">Status</th>
+                <th className="py-3 px-3 font-semibold">Found</th>
+                <th className="py-3 px-3 font-semibold">Created</th>
+                <th className="py-3 px-3 font-semibold">Updated</th>
+                <th className="py-3 px-3 font-semibold">Failed</th>
+                <th className="py-3 px-5 font-semibold">Notes</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200/60 dark:divide-white/[0.05]">
               {recentJobs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-slate-500">
-                    No scrape execution jobs recorded yet.
+                  <td colSpan={8} className="py-8 text-center text-slate-500">
+                    No ingestion jobs recorded yet.
                   </td>
                 </tr>
               ) : (
                 recentJobs.map((j) => (
-                  <tr key={j.id} className="hover:bg-slate-100 dark:hover:bg-slate-800/30">
-                    <td className="py-3 px-3">
+                  <tr key={j.id} className="hover:bg-slate-900/[0.02] dark:hover:bg-white/[0.03] transition-colors">
+                    <td className="py-3 px-5">
                       <SourceBadge code={j.source.code} />
                     </td>
-                    <td className="py-3 px-3 font-mono text-[11px]">
-                      {new Date(j.startedAt).toLocaleTimeString()} ({new Date(j.startedAt).toLocaleDateString()})
-                    </td>
+                    <td className="py-3 px-3 font-mono text-[11px] whitespace-nowrap">{new Date(j.startedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                     <td className="py-3 px-3">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                           j.status === 'SUCCESS'
-                            ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
                             : j.status === 'PARTIAL'
-                            ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                             : j.status === 'RUNNING'
-                            ? 'bg-blue-500/20 text-blue-400 animate-pulse'
-                            : 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                            ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 animate-pulse'
+                            : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
                         }`}
                       >
                         {j.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-mono font-bold text-slate-800 dark:text-slate-200">{j.recordsFound}</td>
+                    <td className="py-3 px-3 font-mono font-bold">{j.recordsFound}</td>
                     <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400">+{j.recordsCreated}</td>
-                    <td className="py-3 px-3 font-mono text-blue-600 dark:text-blue-400">~{j.recordsUpdated}</td>
+                    <td className="py-3 px-3 font-mono text-sky-600 dark:text-sky-400">~{j.recordsUpdated}</td>
                     <td className="py-3 px-3 font-mono text-rose-600 dark:text-rose-400">{j.recordsFailed}</td>
-                    <td className="py-3 px-3 text-slate-600 dark:text-slate-400 truncate max-w-xs">{j.errorMessage || '—'}</td>
+                    <td className="py-3 px-5 text-slate-600 dark:text-slate-400 truncate max-w-xs" title={j.errorMessage || undefined}>
+                      {j.errorMessage || '—'}
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </Panel>
     </div>
   );
 };

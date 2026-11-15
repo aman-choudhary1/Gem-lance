@@ -1,208 +1,185 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence, m } from 'framer-motion';
 import { alertService } from '../services/alertService';
 import { sourceService } from '../services/sourceService';
 import { useAuth } from '../context/AuthContext';
 import { demoLoginEnabled } from '../config/demo';
 import { CreateAlertModal } from '../components/alerts/CreateAlertModal';
 import { EmptyState } from '../components/common/EmptyState';
+import { PageHeader } from '../components/ui/PageHeader';
 import { formatCurrencyINR } from '../utils/formatters';
-import { Bell, Plus, Trash2, Power, Lock, CheckCircle2 } from 'lucide-react';
+import { useSpotlight } from '../hooks/useSpotlight';
+import { Bell, Plus, Trash2, Lock, Search, MapPin, IndianRupee, ArrowRight } from 'lucide-react';
+
+const Chip: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
+  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-slate-900/5 dark:bg-white/[0.07] text-slate-700 dark:text-slate-300">
+    <span className="text-emerald-600 dark:text-emerald-400">{icon}</span>
+    {children}
+  </span>
+);
 
 export const AlertsPage: React.FC = () => {
   const { user, loginAsDemo } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const spotlight = useSpotlight();
   const [modalOpen, setModalOpen] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const { data: alerts = [], isLoading } = useQuery({
     queryKey: ['userAlerts', user?.id],
     queryFn: () => alertService.getAlerts(),
     enabled: !!user
   });
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => sourceService.getCategories(), staleTime: 300000 });
+  const { data: sources = [] } = useQuery({ queryKey: ['sources'], queryFn: () => sourceService.getAllSources(), staleTime: 300000 });
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => sourceService.getCategories(),
-    staleTime: 300000
-  });
-
-  const { data: sources = [] } = useQuery({
-    queryKey: ['sources'],
-    queryFn: () => sourceService.getAllSources(),
-    staleTime: 300000
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      alertService.updateAlert(id, { enabled }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userAlerts'] });
-    }
-  });
-
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['userAlerts'] });
+  const toggleMutation = useMutation({ mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => alertService.updateAlert(id, { enabled }), onSuccess: refresh });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => alertService.deleteAlert(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userAlerts'] });
+      setConfirmId(null);
+      refresh();
     }
   });
 
   if (!user) {
     return (
       <div className="max-w-md mx-auto py-16 text-center space-y-4">
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl inline-block text-amber-600 dark:text-amber-400">
-          <Lock className="w-8 h-8 mx-auto" />
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-rose-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
+          <Lock className="w-7 h-7" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Sign in to Manage Alert Rules</h2>
-        <p className="text-xs text-slate-600 dark:text-slate-400">
-          Receive automatic in-app alerts whenever new government forward auctions match your custom keywords, categories, and locations.
-        </p>
+        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Sign in to manage alerts</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-400">Get notified the moment a notice matches your keywords, category or location.</p>
         <div className="flex justify-center gap-3 pt-2">
+          <Link to="/login" state={{ from: { pathname: '/alerts' } }} className="btn-primary">
+            Sign in
+          </Link>
           {demoLoginEnabled && (
-            <button
-              onClick={() => loginAsDemo('BUYER')}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
-            >
-              One-Click Demo Buyer
+            <button onClick={() => loginAsDemo('BUYER')} className="btn-ghost border border-slate-200 dark:border-white/10">
+              Try demo buyer
             </button>
           )}
-          <Link
-            to="/login"
-            state={{ from: { pathname: '/alerts' } }}
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold"
-          >
-            Sign In
-          </Link>
         </div>
       </div>
     );
   }
 
+  const activeCount = alerts.filter((a) => a.enabled).length;
+
   return (
     <div className="space-y-6 pb-12">
-      <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-2xl">
-            <Bell className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Auction Alerts Engine</h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Automated rules monitoring new ingestion feeds across GeM, MSTC, and state portals.
-            </p>
-          </div>
-        </div>
+      <PageHeader
+        icon={<Bell className="w-6 h-6" />}
+        eyebrow="Never miss a notice"
+        title="Alert rules"
+        description="Rules are checked against every newly indexed notice. Matches land in your notifications."
+        tone="from-amber-500 to-rose-500"
+        actions={
+          <>
+            {!isLoading && alerts.length > 0 && (
+              <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
+                {activeCount} of {alerts.length} active
+              </span>
+            )}
+            <button onClick={() => setModalOpen(true)} className="btn-primary">
+              <Plus className="w-4 h-4" /> New alert rule
+            </button>
+          </>
+        }
+      />
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-900/30 shrink-0"
-        >
-          <Plus className="w-4 h-4" /> Create New Alert Rule
-        </button>
-      </div>
-
-      {/* Rules List */}
-      {alerts.length === 0 ? (
-        <EmptyState
-          icon={<Bell className="w-8 h-8 text-amber-600 dark:text-amber-400" />}
-          title="No Alert Rules Active"
-          description="Create custom keyword, category, or location alert filters to get automatically notified when new matching forward auctions are indexed."
-          actionLabel="Create First Alert"
-          onAction={() => setModalOpen(true)}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {alerts.map((al) => (
-            <div
-              key={al.id}
-              className={`p-5 rounded-2xl border transition flex flex-col justify-between space-y-4 ${
-                al.enabled
-                  ? 'bg-white dark:bg-slate-900/70 border-slate-200 dark:border-slate-800 hover:border-emerald-500/30'
-                  : 'bg-slate-950/40 border-slate-850 opacity-60'
-              }`}
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        al.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
-                      }`}
-                    ></span>
-                    <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">{al.name}</h3>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => toggleMutation.mutate({ id: al.id, enabled: !al.enabled })}
-                      title={al.enabled ? 'Disable Alert' : 'Enable Alert'}
-                      className={`p-1.5 rounded-lg border text-xs transition ${
-                        al.enabled
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700'
-                      }`}
-                    >
-                      <Power className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`Delete alert rule "${al.name}"?`)) {
-                          deleteMutation.mutate(al.id);
-                        }
-                      }}
-                      title="Delete Alert"
-                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Filter tags summary */}
-                <div className="flex flex-wrap gap-1.5 text-[11px]">
-                  {al.keywords && (
-                    <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                      Keywords: <strong className="text-slate-900 dark:text-white">{al.keywords}</strong>
-                    </span>
-                  )}
-                  {al.state && (
-                    <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                      State: <strong className="text-slate-900 dark:text-white">{al.state}</strong>
-                    </span>
-                  )}
-                  {al.minPrice && (
-                    <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                      Min: {formatCurrencyINR(al.minPrice)}
-                    </span>
-                  )}
-                  {al.maxPrice && (
-                    <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                      Max: {formatCurrencyINR(al.maxPrice)}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-                <span>Created {new Date(al.createdAt).toLocaleDateString()}</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Auto-Ingestion Active</span>
-              </div>
+      {isLoading ? (
+        <div className="grid md:grid-cols-2 gap-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-36 rounded-2xl bg-slate-200/70 dark:bg-white/[0.05] relative overflow-hidden">
+              <div className="absolute inset-0 shimmer" />
             </div>
           ))}
         </div>
+      ) : alerts.length === 0 ? (
+        <EmptyState
+          icon={<Bell className="w-8 h-8 text-amber-500" />}
+          title="No alert rules yet"
+          description="Create a rule with keywords, a state or a price range and we will notify you when matching notices are published."
+          actionLabel="Create your first alert"
+          onAction={() => setModalOpen(true)}
+        />
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          <AnimatePresence initial={false}>
+            {alerts.map((al, i) => {
+              const params = new URLSearchParams();
+              if (al.keywords) params.set('search', al.keywords);
+              if (al.state) params.set('state', al.state);
+              if (al.minPrice) params.set('minPrice', String(al.minPrice));
+              if (al.maxPrice) params.set('maxPrice', String(al.maxPrice));
+              const asking = confirmId === al.id;
+              return (
+                <m.article
+                  key={al.id}
+                  layout
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: al.enabled ? 1 : 0.6, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ delay: i * 0.04, duration: 0.35 }}
+                  onPointerMove={spotlight}
+                  className="glass-card rounded-2xl p-5 flex flex-col gap-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">{al.name}</h2>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Created {new Date(al.createdAt).toLocaleDateString('en-IN')}</p>
+                    </div>
+                    <button
+                      role="switch"
+                      aria-checked={al.enabled}
+                      aria-label={al.enabled ? `Pause ${al.name}` : `Resume ${al.name}`}
+                      onClick={() => toggleMutation.mutate({ id: al.id, enabled: !al.enabled })}
+                      className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${al.enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${al.enabled ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {al.keywords && <Chip icon={<Search className="w-3 h-3" />}>{al.keywords}</Chip>}
+                    {al.state && <Chip icon={<MapPin className="w-3 h-3" />}>{al.state}</Chip>}
+                    {!!al.minPrice && <Chip icon={<IndianRupee className="w-3 h-3" />}>Min {formatCurrencyINR(al.minPrice)}</Chip>}
+                    {!!al.maxPrice && <Chip icon={<IndianRupee className="w-3 h-3" />}>Max {formatCurrencyINR(al.maxPrice)}</Chip>}
+                    {!al.keywords && !al.state && !al.minPrice && !al.maxPrice && <span className="text-[11px] text-slate-500">Matches all new notices</span>}
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-200/70 dark:border-white/[0.06] flex items-center justify-between gap-2">
+                    <button onClick={() => navigate(`/auctions?${params.toString()}`)} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:gap-1.5 transition-all">
+                      See current matches <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                    {asking ? (
+                      <span className="flex items-center gap-1.5 text-xs">
+                        <button onClick={() => deleteMutation.mutate(al.id)} disabled={deleteMutation.isPending} className="px-2.5 py-1 rounded-lg bg-rose-500 text-white font-semibold">
+                          Delete
+                        </button>
+                        <button onClick={() => setConfirmId(null)} className="px-2.5 py-1 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/10">
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setConfirmId(al.id)} aria-label={`Delete ${al.name}`} className="p-1.5 rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </m.article>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       )}
 
-      {/* Modal */}
-      <CreateAlertModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreated={() => {
-          queryClient.invalidateQueries({ queryKey: ['userAlerts'] });
-        }}
-        categories={categories}
-        sources={sources}
-      />
+      <CreateAlertModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onCreated={refresh} categories={categories} sources={sources} />
     </div>
   );
 };

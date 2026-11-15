@@ -33,7 +33,7 @@ export function normalizeAuction(raw: RawAuction | RawAuctionDetail, sourceCode:
     description: item.description ? decodeHtmlEntities(item.description) : undefined,
     quantity: Math.max(1, Number(item.quantity) || 1),
     unit: item.unit?.trim() || 'Nos',
-    condition: item.condition?.trim() || 'Used',
+    condition: item.condition?.trim() || undefined,
     estimatedValue: item.estimatedValue !== undefined ? Number(item.estimatedValue) : undefined,
     metadata: item.metadata || {}
   }));
@@ -45,7 +45,7 @@ export function normalizeAuction(raw: RawAuction | RawAuctionDetail, sourceCode:
       description,
       quantity: 1,
       unit: 'Lot',
-      condition: 'Used',
+      condition: undefined,
       estimatedValue: startPrice ?? undefined,
       metadata: {}
     });

@@ -126,7 +126,7 @@ export async function upsertAuction(auction: NormalizedAuction, sourceId: string
             description: it.description || null,
             quantity: new Prisma.Decimal(it.quantity),
             unit: it.unit || 'Nos',
-            condition: it.condition || 'Used',
+            condition: it.condition || null,
             estimatedValue: it.estimatedValue ? new Prisma.Decimal(it.estimatedValue) : null,
             metadata: (it.metadata || {}) as Prisma.InputJsonValue
           }))

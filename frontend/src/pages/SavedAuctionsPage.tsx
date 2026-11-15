@@ -1,16 +1,20 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { m } from 'framer-motion';
 import { savedService } from '../services/savedService';
 import { useAuth } from '../context/AuthContext';
 import { demoLoginEnabled } from '../config/demo';
 import { AuctionCard } from '../components/auction/AuctionCard';
 import { EmptyState } from '../components/common/EmptyState';
 import { AuctionCardSkeleton } from '../components/common/SkeletonLoader';
+import { PageHeader } from '../components/ui/PageHeader';
+import { stagger } from '../components/motion/variants';
 import { Bookmark, Lock } from 'lucide-react';
 
 export const SavedAuctionsPage: React.FC = () => {
   const { user, loginAsDemo } = useAuth();
+  const navigate = useNavigate();
 
   const { data: savedList = [], isLoading } = useQuery({
     queryKey: ['savedAuctionsPage', user?.id],
@@ -22,29 +26,20 @@ export const SavedAuctionsPage: React.FC = () => {
   if (!user) {
     return (
       <div className="max-w-md mx-auto py-16 text-center space-y-4">
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl inline-block text-emerald-600 dark:text-emerald-400 shadow-sm dark:shadow-none">
-          <Lock className="w-8 h-8 mx-auto" />
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30">
+          <Lock className="w-7 h-7" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Sign in to Access Saved Watchlist</h2>
-        <p className="text-xs text-slate-600 dark:text-slate-400">
-          Save high-priority auctions to your personal watchlist, monitor status updates, and configure custom alerts.
-        </p>
+        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Sign in to see your watchlist</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-400">Save notices, track their deadlines and get alerts when similar ones appear.</p>
         <div className="flex justify-center gap-3 pt-2">
+          <Link to="/login" state={{ from: { pathname: '/saved' } }} className="btn-primary">
+            Sign in
+          </Link>
           {demoLoginEnabled && (
-            <button
-              onClick={() => loginAsDemo('BUYER')}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
-            >
-              One-Click Demo Buyer
+            <button onClick={() => loginAsDemo('BUYER')} className="btn-ghost border border-slate-200 dark:border-white/10">
+              Try demo buyer
             </button>
           )}
-          <Link
-            to="/login"
-            state={{ from: { pathname: '/saved' } }}
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold"
-          >
-            Sign In
-          </Link>
         </div>
       </div>
     );
@@ -52,19 +47,20 @@ export const SavedAuctionsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="bg-white/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl space-y-2 shadow-sm dark:shadow-none transition-colors">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-            <Bookmark className="w-6 h-6 fill-emerald-500" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Saved Auction Watchlist</h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Personal monitored collection of bookmarked forward auctions across all portals.
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        icon={<Bookmark className="w-6 h-6 fill-white/90" />}
+        eyebrow="Your watchlist"
+        title="Saved notices"
+        description="Notices you have bookmarked across all portals. Keep an eye on the closing countdowns."
+        tone="from-emerald-500 to-teal-500"
+        actions={
+          !isLoading && (
+            <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
+              {savedList.length} saved
+            </span>
+          )
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -74,18 +70,18 @@ export const SavedAuctionsPage: React.FC = () => {
         </div>
       ) : savedList.length === 0 ? (
         <EmptyState
-          icon={<Bookmark className="w-8 h-8 text-slate-500" />}
+          icon={<Bookmark className="w-8 h-8 text-emerald-500" />}
           title="Your watchlist is empty"
-          description="You haven't bookmarked any auctions yet. Click the bookmark icon on any auction card to save it here for fast monitoring."
-          actionLabel="Explore Auctions"
-          onAction={() => (window.location.href = '/auctions')}
+          description="Tap the bookmark on any notice to save it here for quick access."
+          actionLabel="Explore auctions"
+          onAction={() => navigate('/auctions')}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <m.div variants={stagger(0.04)} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {savedList.map((item) => (
             <AuctionCard key={item.id} auction={item.auction} />
           ))}
-        </div>
+        </m.div>
       )}
     </div>
   );
