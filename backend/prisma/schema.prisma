@@ -1,0 +1,273 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum AuctionStatus {
+  UPCOMING
+  LIVE
+  ENDING_SOON
+  CLOSED
+  CANCELLED
+  UNKNOWN
+}
+
+enum NotificationType {
+  NEW_MATCH
+  ENDING_SOON
+  AUCTION_UPDATED
+  AUCTION_CLOSED
+  SYSTEM
+}
+
+enum ScrapeStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  role          Role           @default(USER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  savedAuctions SavedAuction[]
+  alerts        AuctionAlert[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model AuctionSource {
+  id          String      @id @default(cuid())
+  code        String      @unique // e.g. "GEM", "MSTC", "MOCK", "BANK", "PSU"
+  name        String
+  baseUrl     String?
+  enabled     Boolean     @default(true)
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  auctions    Auction[]
+  scrapeJobs  ScrapeJob[]
+
+  @@map("auction_sources")
+}
+
+model Organization {
+  id          String    @id @default(cuid())
+  name        String
+  department  String?
+  source      String?   // Source portal identifier
+  externalId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  auctions    Auction[]
+
+  @@unique([name, department])
+  @@map("organizations")
+}
+
+model Location {
+  id        String    @id @default(cuid())
+  country   String    @default("India")
+  state     String
+  district  String?
+  city      String?
+  address   String?
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  auctions  Auction[]
+
+  @@index([state])
+  @@index([district])
+  @@map("locations")
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  parentId  String?
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Category[] @relation("CategoryHierarchy")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  auctions  Auction[]
+
+  @@index([slug])
+  @@map("categories")
+}
+
+model Auction {
+  id             String          @id @default(cuid())
+  sourceId       String
+  source         AuctionSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId     String          // Source portal specific auction ID, e.g. "GEM/FA/2026/12345"
+  title          String
+  description    String?         @db.Text
+  
+  organizationId String?
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  categoryId     String?
+  category       Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  locationId     String?
+  location       Location?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  status         AuctionStatus   @default(UPCOMING)
+  sourceStatus   String?         // Original raw status from portal
+  
+  startPrice     Decimal         @default(0) @db.Decimal(14, 2)
+  emdAmount      Decimal?        @db.Decimal(14, 2)
+  bidIncrement   Decimal?        @db.Decimal(14, 2)
+
+  startTime      DateTime
+  endTime        DateTime
+
+  officialUrl    String?         // Link to official source page
+  rawData        Json?           // Full source-specific raw JSON payload
+  
+  lastScrapedAt  DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  items          AuctionItem[]
+  documents      AuctionDocument[]
+  savedByUsers   SavedAuction[]
+  notifications  Notification[]
+
+  @@unique([sourceId, externalId])
+  @@index([sourceId])
+  @@index([status])
+  @@index([startTime])
+  @@index([endTime])
+  @@index([categoryId])
+  @@index([locationId])
+  @@index([organizationId])
+  @@index([startPrice])
+  @@index([createdAt])
+  @@map("auctions")
+}
+
+model AuctionItem {
+  id             String    @id @default(cuid())
+  auctionId      String
+  auction        Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?   @db.Text
+  quantity       Decimal   @default(1) @db.Decimal(10, 2)
+  unit           String?   @default("Nos")
+  condition      String?   // e.g. "Used", "As Is Where Is", "Surplus", "Refurbished"
+  estimatedValue Decimal?  @db.Decimal(14, 2)
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([auctionId])
+  @@map("auction_items")
+}
+
+model AuctionDocument {
+  id           String    @id @default(cuid())
+  auctionId    String
+  auction      Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  name         String
+  documentType String?   // "TENDER_NOTICE", "TERMS_CONDITIONS", "CATALOG", "IMAGE"
+  url          String
+  createdAt    DateTime  @default(now())
+
+  @@index([auctionId])
+  @@map("auction_documents")
+}
+
+model SavedAuction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auctionId String
+  auction   Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, auctionId])
+  @@index([userId])
+  @@index([auctionId])
+  @@map("saved_auctions")
+}
+
+model AuctionAlert {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  keywords    String?  // comma-separated or text keywords
+  sourceIds   String[] @default([]) // Array of source IDs or codes
+  categoryId  String?
+  state       String?
+  district    String?
+  minPrice    Decimal? @db.Decimal(14, 2)
+  maxPrice    Decimal? @db.Decimal(14, 2)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([enabled])
+  @@map("auction_alerts")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auctionId String?
+  auction   Auction?         @relation(fields: [auctionId], references: [id], onDelete: SetNull)
+  type      NotificationType @default(NEW_MATCH)
+  title     String
+  message   String           @db.Text
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model ScrapeJob {
+  id             String        @id @default(cuid())
+  sourceId       String
+  source         AuctionSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  startedAt      DateTime      @default(now())
+  completedAt    DateTime?
+  status         ScrapeStatus  @default(RUNNING)
+  recordsFound   Int           @default(0)
+  recordsCreated Int           @default(0)
+  recordsUpdated Int           @default(0)
+  recordsFailed  Int           @default(0)
+  errorMessage   String?       @db.Text
+
+  @@index([sourceId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("scrape_jobs")
+}
