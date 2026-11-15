@@ -1,94 +1,53 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { m } from 'framer-motion';
 import { DashboardStats } from '../../types';
-import { Gavel, Radio, Clock, CalendarDays, Sparkles, Layers, TrendingUp } from 'lucide-react';
+import { AnimatedNumber } from '../motion/AnimatedNumber';
+import { Stagger } from '../motion/Reveal';
+import { fadeUp } from '../motion/variants';
+import { useSpotlight } from '../../hooks/useSpotlight';
+import { Gavel, Radio, Timer, Sparkles } from 'lucide-react';
 
 interface StatsTickerProps {
   stats: DashboardStats['overview'];
 }
 
 export const StatsTicker: React.FC<StatsTickerProps> = ({ stats }) => {
-  const cards = [
-    {
-      label: 'Total Auctions',
-      value: stats.totalAuctions.toLocaleString('en-IN'),
-      icon: Gavel,
-      trend: '+12% this week',
-      color: 'from-blue-500/15 via-blue-500/5 to-transparent text-blue-500 dark:text-blue-400 border-blue-500/20 dark:border-blue-500/20 shadow-blue-500/5'
-    },
-    {
-      label: 'Live Auctions',
-      value: stats.liveAuctions.toLocaleString('en-IN'),
-      icon: Radio,
-      trend: 'Active bidding',
-      color: 'from-emerald-500/15 via-emerald-500/5 to-transparent text-emerald-600 dark:text-emerald-400 border-emerald-500/30 dark:border-emerald-500/30 shadow-emerald-500/5',
-      isPulse: true
-    },
-    {
-      label: 'Upcoming',
-      value: stats.upcomingAuctions.toLocaleString('en-IN'),
-      icon: CalendarDays,
-      trend: 'Published notices',
-      color: 'from-purple-500/15 via-purple-500/5 to-transparent text-purple-600 dark:text-purple-400 border-purple-500/20 dark:border-purple-500/20 shadow-purple-500/5'
-    },
-    {
-      label: 'Ending Today',
-      value: stats.endingTodayAuctions.toLocaleString('en-IN'),
-      icon: Clock,
-      trend: 'Closing soon',
-      color: 'from-amber-500/15 via-amber-500/5 to-transparent text-amber-600 dark:text-amber-400 border-amber-500/30 dark:border-amber-500/30 shadow-amber-500/5'
-    },
-    {
-      label: 'New Today',
-      value: stats.newTodayAuctions.toLocaleString('en-IN'),
-      icon: Sparkles,
-      trend: 'Freshly crawled',
-      color: 'from-teal-500/15 via-teal-500/5 to-transparent text-teal-600 dark:text-teal-400 border-teal-500/20 dark:border-teal-500/20 shadow-teal-500/5'
-    },
-    {
-      label: 'Active Sources',
-      value: `${stats.totalSources} Portals`,
-      icon: Layers,
-      trend: 'Multi-portal feed',
-      color: 'from-slate-500/15 via-slate-500/5 to-transparent text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700/40 shadow-slate-500/5'
-    }
+  const onPointerMove = useSpotlight();
+
+  const items = [
+    { label: 'Total listings', value: stats.totalAuctions, icon: Gavel, to: '/auctions', grad: 'from-emerald-500 to-teal-500' },
+    { label: 'Live right now', value: stats.liveAuctions, icon: Radio, to: '/auctions?status=LIVE', grad: 'from-cyan-500 to-sky-500', live: true },
+    { label: 'Closing in 24 hours', value: stats.ending24HoursAuctions ?? stats.endingTodayAuctions, icon: Timer, to: '/ending-soon', grad: 'from-amber-500 to-rose-500' },
+    { label: 'Added today', value: stats.newTodayAuctions, icon: Sparkles, to: '/auctions?sortBy=newest', grad: 'from-violet-500 to-indigo-500' }
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-      {cards.map((c, i) => {
-        const Icon = c.icon;
+    <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" gap={0.08}>
+      {items.map((it) => {
+        const Icon = it.icon;
         return (
-          <div
-            key={i}
-            className={`rounded-2xl p-4 bg-gradient-to-b border ${c.color} glass-card relative overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-xl group`}
-          >
-            {/* Ambient accent bubble */}
-            <div className="absolute -right-4 -bottom-4 w-16 h-16 rounded-full bg-current opacity-10 blur-xl pointer-events-none group-hover:scale-150 transition-transform"></div>
-
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">{c.label}</span>
-              <div className="p-1.5 rounded-lg bg-current/10 text-current">
-                <Icon className="w-4 h-4" />
-              </div>
-            </div>
-
-            <div className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white font-mono flex items-center gap-2 mb-1.5">
-              {c.value}
-              {c.isPulse && (
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          <m.div key={it.label} variants={fadeUp} whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 320, damping: 26 }}>
+            <Link to={it.to} onPointerMove={onPointerMove} className="glass-card block rounded-2xl p-4 sm:p-5 group">
+              <div className="flex items-start justify-between">
+                <span className={`w-10 h-10 rounded-xl bg-gradient-to-br ${it.grad} text-white flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform`}>
+                  <Icon className="w-5 h-5" />
                 </span>
-              )}
-            </div>
-
-            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
-              <TrendingUp className="w-3 h-3 opacity-70" />
-              <span>{c.trend}</span>
-            </div>
-          </div>
+                {it.live && it.value > 0 && (
+                  <span className="relative flex h-2.5 w-2.5 mt-1">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                )}
+              </div>
+              <div className="mt-4 font-display text-3xl sm:text-[2rem] font-extrabold text-slate-900 dark:text-white tabular-nums">
+                <AnimatedNumber value={it.value} />
+              </div>
+              <div className="mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors">{it.label} →</div>
+            </Link>
+          </m.div>
         );
       })}
-    </div>
+    </Stagger>
   );
 };

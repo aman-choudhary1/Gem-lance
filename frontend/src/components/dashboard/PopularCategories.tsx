@@ -1,86 +1,65 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { m } from 'framer-motion';
 import { Category } from '../../types';
-import {
-  Car,
-  Factory,
-  Recycle,
-  Building,
-  Laptop,
-  Armchair,
-  Wrench,
-  Pickaxe,
-  Box,
-  ChevronRight
-} from 'lucide-react';
+import { Stagger } from '../motion/Reveal';
+import { fadeUp } from '../motion/variants';
+import { useSpotlight } from '../../hooks/useSpotlight';
+import { Armchair, ArrowUpRight, Box, Building, Car, Factory, Laptop, Pickaxe, Recycle, Wrench } from 'lucide-react';
 
 interface PopularCategoriesProps {
   categories: Category[];
 }
 
-const getCategoryIcon = (slug: string) => {
-  switch (slug) {
-    case 'vehicles':
-      return Car;
-    case 'machinery':
-      return Factory;
-    case 'scrap':
-      return Recycle;
-    case 'property':
-      return Building;
-    case 'electronics':
-      return Laptop;
-    case 'furniture':
-      return Armchair;
-    case 'equipment':
-      return Wrench;
-    case 'mining':
-      return Pickaxe;
-    default:
-      return Box;
-  }
+const ICONS: Record<string, React.ElementType> = {
+  vehicles: Car,
+  machinery: Factory,
+  scrap: Recycle,
+  property: Building,
+  electronics: Laptop,
+  furniture: Armchair,
+  equipment: Wrench,
+  mining: Pickaxe
 };
 
-export const PopularCategories: React.FC<PopularCategoriesProps> = ({ categories }) => {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-          <span>Popular Categories</span>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">Direct filter access</span>
-        </h3>
-        <Link
-          to="/categories"
-          className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 flex items-center gap-1"
-        >
-          View all <ChevronRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
+const GRADIENTS = [
+  'from-emerald-500 to-teal-500',
+  'from-cyan-500 to-sky-500',
+  'from-violet-500 to-indigo-500',
+  'from-amber-500 to-orange-500',
+  'from-rose-500 to-pink-500',
+  'from-lime-500 to-emerald-500'
+];
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {categories.slice(0, 6).map((cat) => {
-          const Icon = getCategoryIcon(cat.slug);
-          return (
+export const PopularCategories: React.FC<PopularCategoriesProps> = ({ categories }) => {
+  const onPointerMove = useSpotlight();
+  // Prefer the busiest categories so the tiles are never empty-looking
+  const top = [...categories].sort((a, b) => (b._count?.auctions ?? 0) - (a._count?.auctions ?? 0)).slice(0, 6);
+
+  return (
+    <Stagger className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4" gap={0.06}>
+      {top.map((cat, i) => {
+        const Icon = ICONS[cat.slug] ?? Box;
+        const count = cat._count?.auctions;
+        return (
+          <m.div key={cat.id} variants={fadeUp} whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 320, damping: 26 }}>
             <Link
-              key={cat.id}
               to={`/auctions?category=${encodeURIComponent(cat.slug)}`}
-              className="glass-card p-3.5 rounded-xl flex items-center gap-3 group hover:border-emerald-500/40 transition"
+              onPointerMove={onPointerMove}
+              className="glass-card rounded-2xl p-4 sm:p-5 flex items-center gap-4 group"
             >
-              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500/20 group-hover:scale-105 transition shrink-0">
-                <Icon className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition">
-                  {cat.name}
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                  {cat._count ? `${cat._count.auctions} auctions` : 'Explore'}
-                </div>
-              </div>
+              <span className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br ${GRADIENTS[i % GRADIENTS.length]} text-white flex items-center justify-center shadow-lg shrink-0 group-hover:scale-110 group-hover:-rotate-3 transition-transform`}>
+                <Icon className="w-6 h-6" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors">{cat.name}</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">{count !== undefined ? `${count.toLocaleString('en-IN')} listings` : 'Explore'}</span>
+              </span>
+              <ArrowUpRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
             </Link>
-          );
-        })}
-      </div>
-    </div>
+          </m.div>
+        );
+      })}
+    </Stagger>
   );
 };

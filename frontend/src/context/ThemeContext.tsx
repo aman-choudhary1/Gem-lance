@@ -12,8 +12,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem('auctionlens_theme') as Theme;
-    if (saved === 'light' || saved === 'dark') return saved;
+    try {
+      const saved = localStorage.getItem('auctionlens_theme') as Theme;
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch {
+      // storage unavailable — fall through to the default
+    }
     return 'dark'; // Default premium dark theme
   });
 
@@ -26,7 +30,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.remove('dark');
       root.classList.add('light');
     }
-    localStorage.setItem('auctionlens_theme', theme);
+    try {
+      localStorage.setItem('auctionlens_theme', theme);
+    } catch {
+      // ignore
+    }
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#060a14' : '#f6f8fc');
   }, [theme]);
 
   const toggleTheme = () => {

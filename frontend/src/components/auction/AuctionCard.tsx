@@ -1,37 +1,41 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Auction } from '../../types';
+import { m } from 'framer-motion';
+import { Auction, AuctionStatus } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { SourceBadge } from '../common/SourceBadge';
 import { CountdownTimer } from '../common/CountdownTimer';
 import { useAuth } from '../../context/AuthContext';
 import { useSaveAuction } from '../../hooks/useSaveAuction';
-import {
-  formatCompactINR,
-  formatDate,
-  decodeHtmlEntities,
-  formatCompactTenderPrice,
-  formatEmdAmount
-} from '../../utils/formatters';
-import {
-  Building2,
-  MapPin,
-  Bookmark,
-  Layers,
-  ExternalLink,
-  ChevronRight
-} from 'lucide-react';
+import { useSpotlight } from '../../hooks/useSpotlight';
+import { fadeUp } from '../motion/variants';
+import { formatDate, decodeHtmlEntities, formatCompactTenderPrice, formatEmdAmount } from '../../utils/formatters';
+import { Building2, MapPin, Bookmark, Layers, ArrowUpRight } from 'lucide-react';
 
 interface AuctionCardProps {
   auction: Auction;
 }
 
+const ACCENT: Record<AuctionStatus, string> = {
+  LIVE: 'from-emerald-400 via-emerald-500 to-cyan-400',
+  ENDING_SOON: 'from-amber-400 via-orange-500 to-rose-500',
+  UPCOMING: 'from-sky-400 via-indigo-400 to-violet-500',
+  CLOSED: 'from-slate-400 to-slate-500',
+  CANCELLED: 'from-slate-400 to-slate-500',
+  UNKNOWN: 'from-slate-400 to-slate-500'
+};
+
 export const AuctionCard: React.FC<AuctionCardProps> = ({ auction }) => {
   const { savedAuctionIds } = useAuth();
   const { toggle } = useSaveAuction();
+  const onPointerMove = useSpotlight();
   const [isSaving, setIsSaving] = useState(false);
 
   const isSaved = savedAuctionIds.has(auction.id);
+  const isLiveOrEnding = auction.status === 'LIVE' || auction.status === 'ENDING_SOON';
+  const isBid = auction.source.code === 'GEM_BIDS';
+  const hasPrice = Number(auction.startPrice) > 0;
+  const detailPath = `/auctions/${encodeURIComponent(auction.externalId)}`;
 
   const handleBookmark = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -44,139 +48,116 @@ export const AuctionCard: React.FC<AuctionCardProps> = ({ auction }) => {
     }
   };
 
-  const isLiveOrEnding = auction.status === 'LIVE' || auction.status === 'ENDING_SOON';
-
   return (
-    <div className="glass-card rounded-2xl p-5 transition duration-200 flex flex-col justify-between group relative overflow-hidden">
-      {/* Top Meta Bar */}
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
+    <m.article
+      variants={fadeUp}
+      whileHover={{ y: -4 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+      onPointerMove={onPointerMove}
+      className="glass-card rounded-2xl flex flex-col overflow-hidden group h-full"
+    >
+      {/* status accent bar */}
+      <div className={`h-1 w-full bg-gradient-to-r ${ACCENT[auction.status] ?? ACCENT.UNKNOWN} ${auction.status === 'ENDING_SOON' ? 'animate-gradient-pan bg-[length:200%_auto]' : ''}`} />
+
+      <div className="p-5 flex flex-col flex-1">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <SourceBadge code={auction.source.code} />
             {auction.category && (
-              <span className="text-[11px] font-medium text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">
+              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-900/5 dark:bg-white/5 px-2 py-0.5 rounded-md truncate max-w-[9rem]">
                 {auction.category.name}
               </span>
             )}
           </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <StatusBadge status={auction.status} />
-            <button
+            <m.button
+              whileTap={{ scale: 0.8 }}
               onClick={handleBookmark}
               disabled={isSaving}
               aria-label={isSaved ? 'Remove from saved' : 'Save auction'}
-              className={`p-1.5 rounded-lg border transition ${
+              aria-pressed={isSaved}
+              className={`relative z-10 p-1.5 rounded-lg border transition ${
                 isSaved
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/40'
+                  : 'text-slate-400 border-slate-200 dark:border-white/10 hover:text-emerald-600 dark:hover:text-emerald-300 hover:border-emerald-500/40'
               }`}
             >
-              <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-emerald-400' : ''}`} />
-            </button>
+              <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+            </m.button>
           </div>
         </div>
 
-        {/* Auction/Bid ID & Title */}
-        <div className="space-y-1.5 mb-4">
+        <div className="mb-4 space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 tracking-wider font-bold">
-              {auction.externalId}
-            </span>
-            {auction.source.code === 'GEM_BIDS' && (
-              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-300 font-mono uppercase">
-                Procurement
-              </span>
+            <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 tracking-wide font-semibold truncate">{auction.externalId}</span>
+            {isBid && (
+              <span className="text-[9px] font-bold px-1.5 rounded bg-teal-500/10 text-teal-600 dark:text-teal-300 font-mono uppercase">Bid</span>
             )}
           </div>
           <Link
-            to={`/auctions/${encodeURIComponent(auction.externalId)}`}
-            className="block text-base font-bold text-slate-900 dark:text-slate-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition leading-snug group-hover:text-emerald-600 dark:group-hover:text-emerald-300"
+            to={detailPath}
+            className="block text-[15px] font-bold leading-snug text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors line-clamp-3 after:absolute after:inset-0 after:content-['']"
           >
             {decodeHtmlEntities(auction.title)}
           </Link>
         </div>
 
-        {/* Organization & Location Info */}
-        <div className="space-y-1.5 text-xs text-slate-500 dark:text-slate-400 mb-4">
-          <div className="flex items-center gap-2 line-clamp-1">
-            <Building2 className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
-            <span className="truncate">{decodeHtmlEntities(auction.organization?.name || 'Government Organization')}</span>
+        <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400 mb-4">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">{decodeHtmlEntities(auction.organization?.name || 'Government organisation')}</span>
           </div>
           <div className="flex items-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
-            <span>
+            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">
               {auction.location?.city ? `${auction.location.city}, ` : ''}
-              {auction.location?.state || 'India'}
+              {auction.location?.state && auction.location.state !== 'Not Specified' ? auction.location.state : 'Location in notice'}
             </span>
           </div>
           {auction.items && auction.items.length > 0 && (
-            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-              <Layers className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
-              <span>{auction.items.length} Lot item{auction.items.length > 1 ? 's' : ''}</span>
+            <div className="flex items-center gap-2">
+              <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>
+                {auction.items.length} lot item{auction.items.length > 1 ? 's' : ''}
+              </span>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Financials & Action Footer */}
-      <div className="pt-4 border-t border-slate-200 dark:border-slate-800/80 space-y-3">
-        <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/60">
-          <div>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-medium">
-              {auction.source.code === 'GEM_BIDS' ? 'Est. Value' : 'Starting Price'}
-            </span>
-            <span
-              className={`text-sm font-extrabold font-mono ${
-                !auction.startPrice || Number(auction.startPrice) <= 0
-                  ? 'text-amber-600 dark:text-amber-400 font-sans text-xs'
-                  : 'text-slate-900 dark:text-slate-100'
-              }`}
-            >
-              {formatCompactTenderPrice(auction.startPrice)}
-            </span>
+        <div className="mt-auto pt-4 border-t border-slate-200/80 dark:border-white/[0.07] space-y-3">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="rounded-xl p-2.5 bg-slate-900/[0.03] dark:bg-white/[0.04]">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-medium">{isBid ? 'Est. value' : 'Start price'}</span>
+              <span className={hasPrice ? 'text-[15px] font-extrabold font-mono text-slate-900 dark:text-white' : 'text-xs font-semibold text-amber-600 dark:text-amber-400'}>
+                {formatCompactTenderPrice(auction.startPrice)}
+              </span>
+            </div>
+            <div className="rounded-xl p-2.5 bg-slate-900/[0.03] dark:bg-white/[0.04]">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-medium">EMD</span>
+              <span className={Number(auction.emdAmount) > 0 ? 'text-[15px] font-bold font-mono text-emerald-600 dark:text-emerald-300' : 'text-xs font-semibold text-slate-500 dark:text-slate-400'}>
+                {formatEmdAmount(auction.emdAmount)}
+              </span>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider block font-medium">EMD Amount</span>
-            <span
-              className={`text-sm font-semibold font-mono ${
-                !auction.emdAmount || Number(auction.emdAmount) <= 0
-                  ? 'text-slate-500 dark:text-slate-400 font-sans text-xs'
-                  : 'text-emerald-600 dark:text-emerald-400'
-              }`}
-            >
-              {formatEmdAmount(auction.emdAmount)}
-            </span>
-          </div>
-        </div>
 
-        <div className="flex items-center justify-between gap-2">
-          {/* Time Countdown / End Date */}
-          <div>
+          <div className="flex items-center justify-between gap-2 min-h-[28px]">
             {isLiveOrEnding ? (
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 font-medium">Closes in:</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Closes</span>
                 <CountdownTimer endTime={auction.endTime} />
               </div>
             ) : auction.status === 'UPCOMING' ? (
-              <span className="text-[11px] text-blue-400 font-mono">
-                Starts {formatDate(auction.startTime)}
-              </span>
+              <span className="text-[11px] text-sky-600 dark:text-sky-300 font-mono">Starts {formatDate(auction.startTime)}</span>
             ) : (
-              <span className="text-[11px] text-slate-400 font-mono">
-                Ended {formatDate(auction.endTime)}
-              </span>
+              <span className="text-[11px] text-slate-500 font-mono">Ended {formatDate(auction.endTime)}</span>
             )}
+            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-300 group-hover:gap-1.5 transition-all">
+              Details <ArrowUpRight className="w-3.5 h-3.5" />
+            </span>
           </div>
-
-          <Link
-            to={`/auctions/${encodeURIComponent(auction.externalId)}`}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:translate-x-0.5 transition"
-          >
-            Details <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
         </div>
       </div>
-    </div>
+    </m.article>
   );
 };

@@ -28,8 +28,8 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
     <span
       className={`inline-flex items-center gap-1 font-mono text-xs font-bold px-2 py-0.5 rounded ${
         isUrgent
-          ? 'bg-amber-500/15 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 animate-pulse'
-          : 'bg-emerald-50 dark:bg-slate-800/80 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
+          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/40'
+          : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
       } ${className}`}
     >
       {showIcon && <Clock className="w-3.5 h-3.5" />}

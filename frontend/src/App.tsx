@@ -5,6 +5,10 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { AppRoutes } from './routes/AppRoutes';
+import { LazyMotion, MotionConfig } from 'framer-motion';
+
+// Animation engine is fetched on demand so it stays out of the entry chunk.
+const loadMotionFeatures = () => import('./components/motion/features').then((mod) => mod.default);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,15 +22,19 @@ const queryClient = new QueryClient({
 export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ThemeProvider>
-          <AuthProvider>
-            <ToastProvider>
-              <AppRoutes />
-            </ToastProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </BrowserRouter>
+      <LazyMotion features={loadMotionFeatures} strict>
+        <MotionConfig reducedMotion="user">
+          <BrowserRouter>
+            <ThemeProvider>
+              <AuthProvider>
+                <ToastProvider>
+                  <AppRoutes />
+                </ToastProvider>
+              </AuthProvider>
+            </ThemeProvider>
+          </BrowserRouter>
+        </MotionConfig>
+      </LazyMotion>
     </QueryClientProvider>
   );
 };

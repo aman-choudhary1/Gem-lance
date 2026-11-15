@@ -61,7 +61,9 @@
 
 ### Frontend
 - **Framework:** React 18 + TypeScript + Vite
-- **Styling:** Tailwind CSS (Dark Glassmorphism SaaS Theme)
+- **Styling:** Tailwind CSS, "Aurora Ink" design system (dark/light themes, glass surfaces, Sora + Inter typography)
+- **Motion:** Framer Motion (`LazyMotion`, shared-layout tab pills, scroll reveals, count-up stats, page transitions); respects `prefers-reduced-motion`
+- **Particles:** tsParticles (lazy-loaded network background on the hero and sign-in screens; disabled for reduced-motion users)
 - **State & Data Fetching:** TanStack Query v5 + Axios
 - **Routing:** React Router DOM v6
 - **Icons & Visuals:** Lucide React + Recharts (Admin analytics charts)

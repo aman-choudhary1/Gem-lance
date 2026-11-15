@@ -24,29 +24,49 @@ const AdminPage = page(() => import('../pages/AdminPage'), 'AdminPage');
 const LoginPage = page(() => import('../pages/LoginPage'), 'LoginPage');
 const RegisterPage = page(() => import('../pages/RegisterPage'), 'RegisterPage');
 
+const AuthFallback: React.FC = () => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950" role="status" aria-label="Loading">
+    <div className="w-10 h-10 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
+  </div>
+);
+
 export const AppRoutes: React.FC = () => {
   return (
-    <Suspense fallback={null}>
-      <Routes>
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/auctions" element={<AuctionsPage />} />
-          <Route path="/bids" element={<BidsPage />} />
-          <Route path="/auctions/:id" element={<AuctionDetailPage />} />
-          <Route path="/ending-soon" element={<EndingSoonPage />} />
-          <Route path="/sources" element={<SourcesPage />} />
-          <Route path="/analytics" element={<AnalyticsReportingPage />} />
-          <Route path="/categories" element={<CategoriesPage />} />
-          <Route path="/locations" element={<LocationsPage />} />
-          <Route path="/saved" element={<SavedAuctionsPage />} />
-          <Route path="/alerts" element={<AlertsPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-      </Routes>
-    </Suspense>
+    <Routes>
+      {/* Auth screens use their own full-screen layout (no navbar/footer) */}
+      <Route
+        path="/login"
+        element={
+          <Suspense fallback={<AuthFallback />}>
+            <LoginPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <Suspense fallback={<AuthFallback />}>
+            <RegisterPage />
+          </Suspense>
+        }
+      />
+
+      <Route element={<MainLayout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/auctions" element={<AuctionsPage />} />
+        <Route path="/bids" element={<BidsPage />} />
+        <Route path="/auctions/:id" element={<AuctionDetailPage />} />
+        <Route path="/ending-soon" element={<EndingSoonPage />} />
+        <Route path="/sources" element={<SourcesPage />} />
+        <Route path="/analytics" element={<AnalyticsReportingPage />} />
+        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/locations" element={<LocationsPage />} />
+        <Route path="/saved" element={<SavedAuctionsPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   );
 };
