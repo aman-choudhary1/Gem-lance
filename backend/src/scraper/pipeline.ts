@@ -4,6 +4,7 @@ import { normalizeAuction, validateAuction } from './normalizer';
 import { upsertAuction } from './deduplicator';
 import { matchAuctionWithAlerts } from '../services/alertService';
 import { logger } from '../utils/logger';
+import { AppError } from '../middleware/errorHandler';
 
 export interface PipelineSummary {
   sourceCode: string;
@@ -17,23 +18,41 @@ export interface PipelineSummary {
   errorMessage?: string;
 }
 
+const runningSources = new Set<string>();
+
 export async function runScraperPipeline(sourceCode: string): Promise<PipelineSummary> {
-  const startTime = Date.now();
   const upperCode = sourceCode.toUpperCase();
+  if (runningSources.has(upperCode)) {
+    throw new AppError(`Ingestion for [${upperCode}] is already running`, 409, 'SYNC_IN_PROGRESS');
+  }
+  runningSources.add(upperCode);
+  try {
+    return await runScraperPipelineUnlocked(upperCode);
+  } finally {
+    runningSources.delete(upperCode);
+  }
+}
+
+async function runScraperPipelineUnlocked(upperCode: string): Promise<PipelineSummary> {
+  const startTime = Date.now();
   logger.info(`[Pipeline] Starting data ingestion pipeline for source: [${upperCode}]`);
 
-  // 1. Resolve source record from DB
+  // 1. Resolve provider first so unknown codes never create junk source rows
   const provider = providerRegistry.get(upperCode);
+  if (!provider) {
+    throw new AppError(`No registered provider for source [${upperCode}]`, 404, 'SOURCE_NOT_FOUND');
+  }
+
   const sourceRecord = await prisma.auctionSource.upsert({
     where: { code: upperCode },
     update: {
-      name: provider?.sourceName,
-      baseUrl: provider?.baseUrl
+      name: provider.sourceName,
+      baseUrl: provider.baseUrl
     },
     create: {
       code: upperCode,
-      name: provider?.sourceName || `${upperCode} Auction Portal`,
-      baseUrl: provider?.baseUrl || (upperCode === 'GEM' ? 'https://forwardauction.gem.gov.in' : 'https://auctionlens.internal'),
+      name: provider.sourceName,
+      baseUrl: provider.baseUrl,
       enabled: true
     }
   });
@@ -69,13 +88,7 @@ export async function runScraperPipeline(sourceCode: string): Promise<PipelineSu
   let errorMessage: string | undefined;
 
   try {
-    // 3. Resolve Provider from Registry
-    const provider = providerRegistry.get(upperCode);
-    if (!provider) {
-      throw new Error(`No registered provider found for code: [${upperCode}]`);
-    }
-
-    // 4. Fetch raw auction batch
+    // 3. Fetch raw auction batch
     const rawAuctions = await provider.fetchAuctions();
     recordsFound = rawAuctions.length;
     logger.info(`[Pipeline] Provider [${upperCode}] returned ${recordsFound} records.`);
@@ -171,14 +184,17 @@ export async function runScraperPipeline(sourceCode: string): Promise<PipelineSu
 }
 
 export async function runAllEnabledScrapers(): Promise<PipelineSummary[]> {
-  const sources = await prisma.auctionSource.findMany({
-    where: { enabled: true }
+  // Run every registered provider whose source has not been disabled by an admin.
+  const disabled = await prisma.auctionSource.findMany({
+    where: { enabled: false },
+    select: { code: true }
   });
+  const disabledCodes = new Set(disabled.map((s) => s.code));
 
   const summaries: PipelineSummary[] = [];
-  for (const src of sources) {
-    const summary = await runScraperPipeline(src.code);
-    summaries.push(summary);
+  for (const code of providerRegistry.getRegisteredCodes()) {
+    if (disabledCodes.has(code)) continue;
+    summaries.push(await runScraperPipeline(code));
   }
   return summaries;
 }

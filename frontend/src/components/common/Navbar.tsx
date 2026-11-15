@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { demoLoginEnabled } from '../../config/demo';
 import { alertService } from '../../services/alertService';
 import { Notification } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
@@ -141,8 +142,8 @@ export const Navbar: React.FC = () => {
 
           {/* Right Action Bar */}
           <div className="flex items-center gap-3">
-            {/* Quick Demo Switcher if Not Logged In */}
-            {!user && (
+            {/* Quick Demo Switcher if Not Logged In (development builds only) */}
+            {!user && demoLoginEnabled && (
               <div className="hidden sm:flex items-center gap-2">
                 <button
                   onClick={() => loginAsDemo('BUYER')}
@@ -373,7 +374,7 @@ export const Navbar: React.FC = () => {
               </Link>
             );
           })}
-          {!user && (
+          {!user && demoLoginEnabled && (
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800 grid grid-cols-2 gap-2">
               <button
                 onClick={() => {

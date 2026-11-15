@@ -34,7 +34,7 @@ async function dumpPostResponse() {
     }
   });
 
-  fs.writeFileSync('d:/My Dev/gem/backend/src/scraper/gem_post_sample.html', postRes.data, 'utf-8');
+  fs.writeFileSync(require('path').join(__dirname, 'gem_post_sample.html'), postRes.data, 'utf-8');
   console.log('Saved gem_post_sample.html with size:', postRes.data.length);
 }
 

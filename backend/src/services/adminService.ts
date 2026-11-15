@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma';
 import { providerRegistry } from '../providers/base/ProviderRegistry';
 import { runScraperPipeline } from '../scraper/pipeline';
+import { clampLimit } from './sourceService';
 
 export class AdminService {
   public async getDashboardOverview() {
@@ -58,7 +59,8 @@ export class AdminService {
   }
 
   public async getScraperStatus() {
-    const healths = await providerRegistry.checkAllHealth();
+    // Admins get a fresh check rather than the cached public view
+    const healths = await providerRegistry.checkAllHealth({ force: true });
     const jobs = await prisma.scrapeJob.findMany({
       take: 20,
       orderBy: { startedAt: 'desc' },
@@ -73,7 +75,7 @@ export class AdminService {
 
   public async getScrapeJobs(limit = 50) {
     return prisma.scrapeJob.findMany({
-      take: limit,
+      take: clampLimit(limit, 50, 200),
       orderBy: { startedAt: 'desc' },
       include: {
         source: { select: { code: true, name: true } }

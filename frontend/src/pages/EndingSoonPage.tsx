@@ -27,12 +27,12 @@ export const EndingSoonPage: React.FC = () => {
       {/* Header */}
       <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/20 p-6 rounded-3xl space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-amber-500/15 text-amber-400 rounded-2xl">
+          <div className="p-3 bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-2xl">
             <Flame className="w-6 h-6 animate-pulse" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Ending Soon Auctions</h1>
-            <p className="text-xs text-slate-300">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Ending Soon Auctions</h1>
+            <p className="text-xs text-slate-700 dark:text-slate-300">
               Live government forward auctions approaching immediate closing deadlines with real-time countdown clocks.
             </p>
           </div>
@@ -66,7 +66,7 @@ export const EndingSoonPage: React.FC = () => {
         </div>
       ) : auctions.length === 0 ? (
         <EmptyState
-          icon={<Zap className="w-8 h-8 text-amber-400" />}
+          icon={<Zap className="w-8 h-8 text-amber-600 dark:text-amber-400" />}
           title="No auctions closing in this timeframe"
           description={`There are currently no live forward auctions ending within the selected window (${selectedHours} hours). Select a wider window to view upcoming deadlines.`}
         />

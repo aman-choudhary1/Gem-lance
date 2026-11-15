@@ -14,7 +14,8 @@ export interface NormalizedAuction {
   district?: string;
   city?: string;
   address?: string;
-  startPrice: number;
+  /** null when the source does not publish a reserve / tender value */
+  startPrice: number | null;
   emdAmount?: number;
   bidIncrement?: number;
   startTime: Date;

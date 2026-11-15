@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { User, SavedAuction } from '../types';
 import { authService } from '../services/authService';
 import { savedService } from '../services/savedService';
+import { getDemoAccount } from '../config/demo';
+import { SESSION_EXPIRED_EVENT } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -19,8 +21,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const cached = localStorage.getItem('auctionlens_user');
-    return cached ? JSON.parse(cached) : null;
+    try {
+      const cached = localStorage.getItem('auctionlens_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [savedAuctionIds, setSavedAuctionIds] = useState<Set<string>>(new Set());
@@ -57,6 +63,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initAuth();
+  }, []);
+
+  // If the API reports the session can't be refreshed, reflect that in the UI immediately.
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null);
+      setSavedAuctionIds(new Set());
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   // Update saved items whenever user changes
@@ -104,11 +120,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginAsDemo = async (role: 'ADMIN' | 'BUYER') => {
-    if (role === 'ADMIN') {
-      await login('admin@auctionlens.io', 'AdminPassword@2026');
-    } else {
-      await login('buyer@auctionlens.io', 'BuyerPassword@2026');
+    const account = getDemoAccount(role);
+    if (!account) {
+      throw new Error('Demo login is only available in development builds');
     }
+    await login(account.email, account.password);
   };
 
   const toggleSave = async (auctionId: string): Promise<boolean> => {

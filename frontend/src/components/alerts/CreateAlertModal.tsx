@@ -77,51 +77,51 @@ export const CreateAlertModal: React.FC<CreateAlertModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950/80 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          className="absolute top-5 right-5 p-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-3 mb-5">
-          <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl">
+          <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
             <BellRing className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-100">Create Auction Alert</h3>
-            <p className="text-xs text-slate-400">Get in-app notifications whenever matching auctions are published.</p>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Create Auction Alert</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400">Get in-app notifications whenever matching auctions are published.</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="font-semibold text-slate-300 block mb-1">Alert Rule Name *</label>
+            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Alert Rule Name *</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Chhattisgarh Heavy Vehicles"
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div>
-            <label className="font-semibold text-slate-300 block mb-1">Search Keywords (comma separated)</label>
+            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Search Keywords (comma separated)</label>
             <input
               type="text"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
               placeholder="e.g. vehicle, suv, bolero, scrap, transformer"
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div>
-            <label className="font-semibold text-slate-300 block mb-1">Sources / Portals</label>
+            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Sources / Portals</label>
             <div className="flex flex-wrap gap-2">
               {sources.map((s) => {
                 const selected = selectedSources.includes(s.code);
@@ -133,7 +133,7 @@ export const CreateAlertModal: React.FC<CreateAlertModalProps> = ({
                     className={`px-3 py-1 rounded-lg border transition ${
                       selected
                         ? 'bg-emerald-600 text-white border-emerald-500 font-semibold'
-                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                        : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
                   >
                     {s.name}
@@ -145,11 +145,11 @@ export const CreateAlertModal: React.FC<CreateAlertModalProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-semibold text-slate-300 block mb-1">Category</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Category</label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
               >
                 <option value="">Any Category</option>
                 {categories.map((c) => (
@@ -161,36 +161,36 @@ export const CreateAlertModal: React.FC<CreateAlertModalProps> = ({
             </div>
 
             <div>
-              <label className="font-semibold text-slate-300 block mb-1">Target State</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Target State</label>
               <input
                 type="text"
                 value={state}
                 onChange={(e) => setState(e.target.value)}
                 placeholder="e.g. Chhattisgarh"
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-semibold text-slate-300 block mb-1">Min Price (₹)</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Min Price (₹)</label>
               <input
                 type="number"
                 value={minPrice}
                 onChange={(e) => setMinPrice(e.target.value)}
                 placeholder="0"
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
             <div>
-              <label className="font-semibold text-slate-300 block mb-1">Max Price (₹)</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Max Price (₹)</label>
               <input
                 type="number"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value)}
                 placeholder="Unlimited"
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
           </div>
@@ -199,7 +199,7 @@ export const CreateAlertModal: React.FC<CreateAlertModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-800 text-slate-400 hover:text-white transition"
+              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
             >
               Cancel
             </button>

@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { AuctionStatus } from '@prisma/client';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 import { runAllEnabledScrapers } from '../scraper/pipeline';
@@ -82,17 +83,25 @@ export class ScraperScheduler {
     });
 
     const now = new Date();
-    let updatedCount = 0;
 
+    // Group ids by their new status so we issue one UPDATE per status instead of one per row.
+    const idsByStatus = new Map<AuctionStatus, string[]>();
     for (const a of activeAuctions) {
       const calculated = calculateAuctionStatus(a.startTime, a.endTime, now);
       if (calculated !== a.status) {
-        await prisma.auction.update({
-          where: { id: a.id },
-          data: { status: calculated }
-        });
-        updatedCount++;
+        const ids = idsByStatus.get(calculated) ?? [];
+        ids.push(a.id);
+        idsByStatus.set(calculated, ids);
       }
+    }
+
+    let updatedCount = 0;
+    for (const [status, ids] of idsByStatus) {
+      const result = await prisma.auction.updateMany({
+        where: { id: { in: ids } },
+        data: { status }
+      });
+      updatedCount += result.count;
     }
 
     if (updatedCount > 0) {

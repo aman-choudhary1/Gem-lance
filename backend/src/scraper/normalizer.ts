@@ -4,13 +4,16 @@ import { calculateAuctionStatus } from '../utils/statusCalculator';
 import { decodeHtmlEntities } from '../utils/textUtils';
 import { logger } from '../utils/logger';
 
+export const UNSPECIFIED_STATE = 'Not Specified';
+
 export function normalizeAuction(raw: RawAuction | RawAuctionDetail, sourceCode: string): NormalizedAuction {
   const startTime = new Date(raw.startTime);
   const endTime = new Date(raw.endTime);
 
-  // Fallback for invalid dates
+  // A missing start time is treated as "open now"; a missing/invalid end time is left invalid so
+  // validateAuction() rejects the record instead of inventing a closing date.
   const validStartTime = isNaN(startTime.getTime()) ? new Date() : startTime;
-  const validEndTime = isNaN(endTime.getTime()) ? new Date(validStartTime.getTime() + 48 * 3600000) : endTime;
+  const validEndTime = endTime;
 
   // Calculate standard normalized status
   const status = calculateAuctionStatus(validStartTime, validEndTime);
@@ -19,7 +22,8 @@ export function normalizeAuction(raw: RawAuction | RawAuctionDetail, sourceCode:
   const rawTitle = decodeHtmlEntities(raw.title || 'Untitled Auction Notice');
   const title = rawTitle.substring(0, 300);
   const description = decodeHtmlEntities(raw.description || title);
-  const startPrice = Math.max(0, Number(raw.startPrice) || 0);
+  const parsedPrice = Number(raw.startPrice);
+  const startPrice = Number.isFinite(parsedPrice) && parsedPrice > 0 ? parsedPrice : null;
   const emdAmount = raw.emdAmount !== undefined ? Math.max(0, Number(raw.emdAmount)) : undefined;
   const bidIncrement = raw.bidIncrement !== undefined ? Math.max(0, Number(raw.bidIncrement)) : undefined;
 
@@ -42,7 +46,7 @@ export function normalizeAuction(raw: RawAuction | RawAuctionDetail, sourceCode:
       quantity: 1,
       unit: 'Lot',
       condition: 'Used',
-      estimatedValue: startPrice,
+      estimatedValue: startPrice ?? undefined,
       metadata: {}
     });
   }
@@ -52,7 +56,7 @@ export function normalizeAuction(raw: RawAuction | RawAuctionDetail, sourceCode:
     name: (doc.name || `Document #${idx + 1}`).trim(),
     documentType: doc.documentType?.trim() || 'TENDER_NOTICE',
     url: doc.url.trim()
-  }));
+  })).filter((doc) => /^https?:\/\//i.test(doc.url));
 
   return {
     sourceCode: sourceCode.toUpperCase(),
@@ -64,9 +68,9 @@ export function normalizeAuction(raw: RawAuction | RawAuctionDetail, sourceCode:
     categoryName: decodeHtmlEntities(raw.categoryName) || 'General Surplus & Misc',
     organizationName: decodeHtmlEntities(raw.organization?.name) || 'Government Department / PSU',
     departmentName: raw.organization?.department ? decodeHtmlEntities(raw.organization.department) : undefined,
-    state: raw.location?.state?.trim() || 'Delhi',
-    district: raw.location?.district?.trim(),
-    city: raw.location?.city?.trim() || 'New Delhi',
+    state: raw.location?.state?.trim() || UNSPECIFIED_STATE,
+    district: raw.location?.district?.trim() || undefined,
+    city: raw.location?.city?.trim() || undefined,
     address: raw.location?.address?.trim(),
     startPrice,
     emdAmount,
@@ -87,6 +91,10 @@ export function validateAuction(auction: NormalizedAuction): boolean {
   }
   if (!auction.title || auction.title.length < 3) {
     logger.warn(`Validation failed: title too short`, { externalId: auction.externalId });
+    return false;
+  }
+  if (isNaN(auction.endTime.getTime())) {
+    logger.warn(`Validation failed: missing or invalid endTime`, { externalId: auction.externalId });
     return false;
   }
   if (auction.startTime.getTime() >= auction.endTime.getTime()) {

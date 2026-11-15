@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sourceService, SiteAnalyticsItem, AnalyticsReportData } from '../services/sourceService';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { SourceBadge } from '../components/common/SourceBadge';
 import {
   BarChart,
@@ -41,6 +42,9 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 export const AnalyticsReportingPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { showIngestionStart, showIngestionSuccess, showIngestionError } = useToast();
+  const { user } = useAuth();
+  // Triggering ingestion is an admin-only API; hide the controls for everyone else.
+  const canSync = user?.role === 'ADMIN';
 
   const [searchFilter, setSearchFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState<'ALL' | 'Central' | 'State' | 'Union Territory'>('ALL');
@@ -62,13 +66,17 @@ export const AnalyticsReportingPage: React.FC = () => {
       const toastId = showIngestionStart(code, name);
       try {
         const result = await sourceService.triggerSync(code);
-        showIngestionSuccess(toastId, result, name);
+        if (result.status === 'FAILED') {
+          showIngestionError(toastId, code, result.errorMessage || 'Ingestion failed');
+        } else {
+          showIngestionSuccess(toastId, result, name);
+        }
         queryClient.invalidateQueries({ queryKey: ['analyticsReport'] });
         queryClient.invalidateQueries({ queryKey: ['allSourcesPage'] });
         queryClient.invalidateQueries({ queryKey: ['auctionsList'] });
         return result;
       } catch (err: any) {
-        showIngestionError(toastId, code, err.message || 'Ingestion failed');
+        showIngestionError(toastId, code, err.response?.data?.error?.message || err.message || 'Ingestion failed');
         throw err;
       } finally {
         setSyncingCode(null);
@@ -83,24 +91,32 @@ export const AnalyticsReportingPage: React.FC = () => {
       const toastId = showIngestionStart('BATCH_SYNC', 'Priority Central & State Portals');
       try {
         const results = await sourceService.triggerBatchSync();
-        const totalCreated = results.reduce((acc, r) => acc + (r.recordsCreated || 0), 0);
-        showIngestionSuccess(
-          toastId,
-          {
-            sourceCode: 'BATCH',
-            jobId: 'BATCH_JOB',
-            status: 'SUCCESS',
-            recordsFound: totalCreated,
-            recordsCreated: totalCreated,
-            recordsUpdated: 0,
-            recordsFailed: 0,
-            durationMs: 8500
-          },
-          'Priority Central & State Portals'
-        );
+        const sum = (key: 'recordsFound' | 'recordsCreated' | 'recordsUpdated' | 'recordsFailed' | 'durationMs') =>
+          results.reduce((acc, r) => acc + (r[key] || 0), 0);
+        const failedSources = results.filter((r) => r.status === 'FAILED');
+        if (results.length > 0 && failedSources.length === results.length) {
+          showIngestionError(toastId, 'BATCH', `All ${results.length} portals failed to sync`);
+        } else {
+          showIngestionSuccess(
+            toastId,
+            {
+              sourceCode: 'BATCH',
+              jobId: 'BATCH_JOB',
+              status: failedSources.length > 0 ? 'PARTIAL' : 'SUCCESS',
+              recordsFound: sum('recordsFound'),
+              recordsCreated: sum('recordsCreated'),
+              recordsUpdated: sum('recordsUpdated'),
+              recordsFailed: sum('recordsFailed'),
+              durationMs: sum('durationMs')
+            },
+            failedSources.length > 0
+              ? `Priority portals (${failedSources.length} of ${results.length} failed)`
+              : 'Priority Central & State Portals'
+          );
+        }
         queryClient.invalidateQueries({ queryKey: ['analyticsReport'] });
       } catch (err: any) {
-        showIngestionError(toastId, 'BATCH', err.message || 'Batch sync failed');
+        showIngestionError(toastId, 'BATCH', err.response?.data?.error?.message || err.message || 'Batch sync failed');
       } finally {
         setBatchSyncing(false);
       }
@@ -190,6 +206,7 @@ export const AnalyticsReportingPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {canSync && (
             <button
               onClick={() => batchSyncMutation.mutate()}
               disabled={batchSyncing}
@@ -198,6 +215,7 @@ export const AnalyticsReportingPage: React.FC = () => {
               <Zap className={`w-4 h-4 ${batchSyncing ? 'animate-spin' : ''}`} />
               {batchSyncing ? 'Syncing Priority...' : 'Sync Priority Portals'}
             </button>
+            )}
 
             <button
               onClick={handleExportCsv}
@@ -434,7 +452,7 @@ export const AnalyticsReportingPage: React.FC = () => {
                 <th className="px-4 py-3.5 font-bold">Tenders / Bids Count</th>
                 <th className="px-4 py-3.5 font-bold">Last Ingestion Status</th>
                 <th className="px-4 py-3.5 font-bold">Health</th>
-                <th className="px-6 py-3.5 font-bold text-right">Actions</th>
+                {canSync && <th className="px-6 py-3.5 font-bold text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80 font-sans">
@@ -533,7 +551,8 @@ export const AnalyticsReportingPage: React.FC = () => {
                       </span>
                     </td>
 
-                    {/* Action Button: Fetch Live Now */}
+                    {/* Action Button: Fetch Live Now (admins only) */}
+                    {canSync && (
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => singleSyncMutation.mutate({ code: site.code, name: site.name })}
@@ -548,6 +567,7 @@ export const AnalyticsReportingPage: React.FC = () => {
                         {isSyncing ? 'Fetching...' : 'Fetch Live Now'}
                       </button>
                     </td>
+                    )}
                   </tr>
                 );
               })}

@@ -22,16 +22,18 @@ export class AuthService {
         passwordHash,
         role: Role.USER
       },
-      select: { id: true, name: true, email: true, role: true, createdAt: true }
+      select: { id: true, name: true, email: true, role: true, createdAt: true, tokenVersion: true }
     });
 
     const accessToken = signAccessToken({ userId: user.id, email: user.email, role: user.role });
-    const refreshToken = signRefreshToken({ userId: user.id });
+    const refreshToken = signRefreshToken({ userId: user.id, tv: user.tokenVersion });
+    const { tokenVersion: _tv, ...publicUser } = user;
 
-    return { user, accessToken, refreshToken };
+    return { user: publicUser, accessToken, refreshToken };
   }
 
   public async login(data: { email: string; password: string }) {
+
     const user = await prisma.user.findUnique({
       where: { email: data.email.toLowerCase() }
     });
@@ -46,7 +48,7 @@ export class AuthService {
     }
 
     const accessToken = signAccessToken({ userId: user.id, email: user.email, role: user.role });
-    const refreshToken = signRefreshToken({ userId: user.id });
+    const refreshToken = signRefreshToken({ userId: user.id, tv: user.tokenVersion });
 
     return {
       user: {
@@ -61,24 +63,44 @@ export class AuthService {
     };
   }
 
-  public async refreshToken(token: string) {
+  public async refreshToken(token: string | undefined) {
     try {
+      if (!token) throw new Error('missing');
       const decoded = verifyRefreshToken(token);
       const user = await prisma.user.findUnique({
         where: { id: decoded.userId },
-        select: { id: true, name: true, email: true, role: true }
+        select: { id: true, name: true, email: true, role: true, tokenVersion: true }
       });
 
-      if (!user) {
-        throw new AppError('User not found', 401, 'USER_NOT_FOUND');
+      // Reject tokens issued before the last logout (or minted before versioning existed).
+      if (!user || decoded.tv !== user.tokenVersion) {
+        throw new Error('revoked');
       }
 
       const newAccessToken = signAccessToken({ userId: user.id, email: user.email, role: user.role });
-      const newRefreshToken = signRefreshToken({ userId: user.id });
+      const newRefreshToken = signRefreshToken({ userId: user.id, tv: user.tokenVersion });
+      const { tokenVersion: _tv, ...publicUser } = user;
 
-      return { user, accessToken: newAccessToken, refreshToken: newRefreshToken };
+      return { user: publicUser, accessToken: newAccessToken, refreshToken: newRefreshToken };
     } catch {
       throw new AppError('Invalid or expired refresh token', 401, 'INVALID_REFRESH_TOKEN');
+    }
+  }
+
+  /**
+   * Revokes all refresh tokens for the user that owns `token` (if it is valid).
+   * Invalid/expired tokens are ignored so logout always succeeds for the client.
+   */
+  public async revokeRefreshToken(token: string | undefined): Promise<void> {
+    if (!token) return;
+    try {
+      const decoded = verifyRefreshToken(token);
+      await prisma.user.updateMany({
+        where: { id: decoded.userId, tokenVersion: decoded.tv },
+        data: { tokenVersion: { increment: 1 } }
+      });
+    } catch {
+      // ignore
     }
   }
 

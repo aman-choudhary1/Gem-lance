@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { savedService } from '../services/savedService';
 import { useAuth } from '../context/AuthContext';
+import { demoLoginEnabled } from '../config/demo';
 import { AuctionCard } from '../components/auction/AuctionCard';
 import { EmptyState } from '../components/common/EmptyState';
 import { AuctionCardSkeleton } from '../components/common/SkeletonLoader';
@@ -29,14 +30,17 @@ export const SavedAuctionsPage: React.FC = () => {
           Save high-priority auctions to your personal watchlist, monitor status updates, and configure custom alerts.
         </p>
         <div className="flex justify-center gap-3 pt-2">
-          <button
-            onClick={() => loginAsDemo('BUYER')}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
-          >
-            One-Click Demo Buyer
-          </button>
+          {demoLoginEnabled && (
+            <button
+              onClick={() => loginAsDemo('BUYER')}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
+            >
+              One-Click Demo Buyer
+            </button>
+          )}
           <Link
             to="/login"
+            state={{ from: { pathname: '/saved' } }}
             className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold"
           >
             Sign In

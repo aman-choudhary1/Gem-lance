@@ -29,14 +29,18 @@ export const SourceBadge: React.FC<SourceBadgeProps> = ({ code, className = '' }
   } else if (upper === 'PSU') {
     badgeStyle = 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30';
   } else if (upper === 'MOCK') {
-    badgeStyle = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+    badgeStyle = 'bg-yellow-400/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/40 border-dashed';
   }
+
+  // Sample (mock) records are labelled explicitly so they are never mistaken for real notices.
+  const isSample = upper === 'MOCK';
 
   return (
     <span
+      title={isSample ? 'Sample data for demonstration only — not a real auction notice' : undefined}
       className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold tracking-wide uppercase border font-mono ${badgeStyle} ${className}`}
     >
-      {upper}
+      {isSample ? 'SAMPLE DATA' : upper}
     </span>
   );
 };

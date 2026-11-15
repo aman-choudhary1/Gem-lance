@@ -9,6 +9,12 @@ import {
 } from '../../types/provider';
 import { GepnicPortalConfig } from './gepnicConfig';
 import { logger } from '../../utils/logger';
+import { env } from '../../config/env';
+import { mapWithConcurrency } from '../../utils/concurrency';
+import { stableId } from '../../utils/hash';
+import { istToDate } from '../../utils/istDate';
+
+const DETAIL_FETCH_CONCURRENCY = 4;
 
 export class GepnicProvider implements AuctionDataProvider {
   public readonly sourceCode: string;
@@ -37,8 +43,10 @@ export class GepnicProvider implements AuctionDataProvider {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9'
       },
+      // TLS verification is on by default. Some NIC portals serve incomplete certificate chains;
+      // set GEPNIC_ALLOW_INSECURE_TLS=true only if you accept that risk for those portals.
       httpsAgent: new https.Agent({
-        rejectUnauthorized: false
+        rejectUnauthorized: !env.GEPNIC_ALLOW_INSECURE_TLS
       })
     });
   }
@@ -73,17 +81,15 @@ export class GepnicProvider implements AuctionDataProvider {
       if (!tenderTable) return [];
       const rows = tenderTable.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
 
-      const parsedTenders: RawAuction[] = [];
-
-      for (const row of rows) {
+      const processRow = async (row: string): Promise<RawAuction | null> => {
         // Skip header rows
         if (/class=["']list_header["']/i.test(row) || /Tender Title/i.test(row)) {
-          continue;
+          return null;
         }
 
         // Extract cells: [S.No + Title with link, Ref No, Closing Date, Bid Opening Date]
         const cells = row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [];
-        if (cells.length < 3 || !cells[0]) continue;
+        if (cells.length < 3 || !cells[0]) return null;
 
         const cellTexts = cells.map((c) =>
           c
@@ -102,7 +108,7 @@ export class GepnicProvider implements AuctionDataProvider {
         const closingDateStr = cellTexts[2] || '';
         const openingDateStr = cellTexts[3] || '';
 
-        if (!rawTitle || rawTitle.length < 3) continue;
+        if (!rawTitle || rawTitle.length < 3) return null;
 
         // Try to fetch full details if detail link is available
         let detailedData: Record<string, string> = {};
@@ -115,7 +121,9 @@ export class GepnicProvider implements AuctionDataProvider {
         }
 
         // Map extracted fields to RawAuction
-        const tenderId = detailedData['Tender ID'] || refNo || `${this.sourceCode}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        // Fall back to a deterministic hash so repeated scrapes of the same tender dedupe correctly.
+        const tenderId =
+          detailedData['Tender ID'] || refNo || `${this.sourceCode}-${stableId(this.sourceCode, rawTitle, closingDateStr)}`;
         const title = detailedData['Title'] || rawTitle;
         const workDescription = detailedData['Work Description'] || title;
         const orgChain = detailedData['Organisation Chain'] || 'Government of India';
@@ -131,16 +139,12 @@ export class GepnicProvider implements AuctionDataProvider {
 
         // Parse critical dates
         const publishedDateStr = detailedData['Published Date'] || detailedData['Bid Submission Start Date'];
-        const publishedDate = this.parseGepnicDate(publishedDateStr) || new Date();
-        
-        const closingDate = this.parseGepnicDate(detailedData['Bid Submission End Date']) ||
-                            this.parseGepnicDate(closingDateStr) ||
-                            new Date(publishedDate.getTime() + 14 * 24 * 3600000);
+        const startTime = this.parseGepnicDate(publishedDateStr) || new Date();
+        const closingDate =
+          this.parseGepnicDate(detailedData['Bid Submission End Date']) || this.parseGepnicDate(closingDateStr);
 
-        // Ensure startTime is strictly before endTime
-        const startTime = publishedDate.getTime() >= closingDate.getTime()
-          ? new Date(closingDate.getTime() - 24 * 3600000)
-          : publishedDate;
+        // Without a published closing date the record is not useful; skip rather than guess one.
+        if (!closingDate) return null;
 
         const locationStr = detailedData['Location'] || this.stateName;
         const pincode = detailedData['Pincode'] || '';
@@ -185,7 +189,6 @@ export class GepnicProvider implements AuctionDataProvider {
           }
         };
 
-        parsedTenders.push(rawAuction);
 
         // Cache for detail lookups
         this.cache.set(tenderId, {
@@ -193,7 +196,14 @@ export class GepnicProvider implements AuctionDataProvider {
           contactPerson: detailedData['Contract Person'] || undefined,
           contactEmail: detailedData['Email'] || undefined
         });
-      }
+
+        return rawAuction;
+      };
+
+      // Detail pages are fetched with bounded parallelism to stay polite while avoiding a fully serial crawl.
+      const parsedTenders = (await mapWithConcurrency(rows, DETAIL_FETCH_CONCURRENCY, processRow)).filter(
+        (t): t is RawAuction => t !== null
+      );
 
       this.lastSyncTime = new Date();
       this.lastError = null;
@@ -202,7 +212,7 @@ export class GepnicProvider implements AuctionDataProvider {
     } catch (error) {
       this.lastError = (error as Error).message;
       logger.error(`[GepnicProvider:${this.sourceCode}] Scrape error: ${this.lastError}`);
-      return [];
+      throw error;
     }
   }
 
@@ -294,6 +304,6 @@ export class GepnicProvider implements AuctionDataProvider {
     if (ampm === 'PM' && hour < 12) hour += 12;
     if (ampm === 'AM' && hour === 12) hour = 0;
 
-    return new Date(Date.UTC(year, month, day, hour, minute));
+    return istToDate(year, month, day, hour, minute);
   }
 }

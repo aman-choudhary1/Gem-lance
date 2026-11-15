@@ -118,9 +118,20 @@ export async function matchAuctionWithAlerts(auctionId: string): Promise<number>
       where: { enabled: true }
     });
 
+    // Users already notified about this auction (from a previous run, or another of their alerts).
+    const alreadyNotified = new Set(
+      (
+        await prisma.notification.findMany({
+          where: { auctionId: auction.id, type: 'NEW_MATCH' },
+          select: { userId: true }
+        })
+      ).map((n) => n.userId)
+    );
+
     let matchedCount = 0;
 
     for (const alert of activeAlerts) {
+      if (alreadyNotified.has(alert.userId)) continue;
       let isMatch = true;
 
       // 1. Source check
@@ -153,14 +164,15 @@ export async function matchAuctionWithAlerts(auctionId: string): Promise<number>
       }
 
       // 5. Price range check
-      const startPriceNum = Number(auction.startPrice);
+      // Price filters only match auctions with a disclosed price (same semantics as search filters).
+      const startPriceNum = auction.startPrice !== null ? Number(auction.startPrice) : null;
       if (isMatch && alert.minPrice) {
-        if (startPriceNum < Number(alert.minPrice)) {
+        if (startPriceNum === null || startPriceNum < Number(alert.minPrice)) {
           isMatch = false;
         }
       }
       if (isMatch && alert.maxPrice) {
-        if (startPriceNum > Number(alert.maxPrice)) {
+        if (startPriceNum === null || startPriceNum > Number(alert.maxPrice)) {
           isMatch = false;
         }
       }
@@ -183,9 +195,12 @@ export async function matchAuctionWithAlerts(auctionId: string): Promise<number>
             auctionId: auction.id,
             type: 'NEW_MATCH',
             title: `Matching Auction: ${auction.title.substring(0, 60)}...`,
-            message: `Auction [${auction.source.code}] ${auction.externalId} matches your alert "${alert.name}". Starting price: ₹${Number(auction.startPrice).toLocaleString('en-IN')}`
+            message: `Auction [${auction.source.code}] ${auction.externalId} matches your alert "${alert.name}". ${
+              startPriceNum !== null ? `Starting price: ₹${startPriceNum.toLocaleString('en-IN')}` : 'Price not disclosed'
+            }`
           }
         });
+        alreadyNotified.add(alert.userId);
         matchedCount++;
       }
     }

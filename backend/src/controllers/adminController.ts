@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { adminService } from '../services/adminService';
 import { sourceService } from '../services/sourceService';
+import { AppError } from '../middleware/errorHandler';
 
 export class AdminController {
   public async getDashboard(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -44,7 +45,10 @@ export class AdminController {
   public async toggleSource(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
-      const { enabled } = req.body;
+      const { enabled } = req.body ?? {};
+      if (typeof enabled !== 'boolean') {
+        throw new AppError('Body must include "enabled": true | false', 422, 'VALIDATION_ERROR');
+      }
       const result = await sourceService.toggleSource(id, enabled);
       res.status(200).json({ success: true, data: result });
     } catch (error) {

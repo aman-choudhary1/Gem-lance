@@ -71,7 +71,8 @@ export interface Auction {
   source: AuctionSource;
   status: AuctionStatus;
   sourceStatus?: string | null;
-  startPrice: number | string;
+  /** null when the source portal does not disclose a price */
+  startPrice: number | string | null;
   emdAmount?: number | string | null;
   bidIncrement?: number | string | null;
   startTime: string;

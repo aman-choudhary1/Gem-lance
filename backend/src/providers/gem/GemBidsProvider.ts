@@ -119,24 +119,17 @@ export class GemBidsProvider implements AuctionDataProvider {
         return results;
       }
 
-      logger.warn(`[GemBidsProvider] Live API returned 0 records. Ingesting verified GeM Bids catalog.`);
-      return this.getVerifiedBidsCatalog();
+      logger.warn(`[GemBidsProvider] Live API returned 0 records. No records ingested this cycle.`);
+      return [];
     } catch (error) {
       const msg = (error as Error).message;
       this.lastError = msg;
-      logger.warn(`[GemBidsProvider] Live endpoint note: ${msg}. Ingesting verified GeM Bids catalog.`);
-      return this.getVerifiedBidsCatalog();
+      throw new Error(`GeM BidPlus fetch failed: ${msg}`);
     }
   }
 
   public async fetchAuctionDetails(externalId: string): Promise<RawAuctionDetail | null> {
-    if (this.bidsCache.has(externalId)) {
-      return this.bidsCache.get(externalId)!;
-    }
-
-    const catalog = this.getVerifiedBidsCatalog();
-    const found = catalog.find((b) => b.externalId === externalId);
-    return found || null;
+    return this.bidsCache.get(externalId) ?? null;
   }
 
   public async healthCheck(): Promise<ProviderHealth> {
@@ -150,9 +143,9 @@ export class GemBidsProvider implements AuctionDataProvider {
       return {
         source: this.sourceCode,
         healthy: res.status >= 200 && res.status < 400,
-        lastSuccessfulSync: this.lastSyncTime ? this.lastSyncTime.toISOString() : new Date().toISOString(),
+        lastSuccessfulSync: this.lastSyncTime ? this.lastSyncTime.toISOString() : null,
         responseTimeMs: Date.now() - startTime,
-        message: 'GeM BidPlus Portal reachable (Session & CSRF synchronized).',
+        message: `GeM BidPlus portal responded with HTTP ${res.status}.`,
         details: {
           baseUrl: this.baseUrl,
           statusCode: res.status,
@@ -195,20 +188,16 @@ export class GemBidsProvider implements AuctionDataProvider {
       const officialUrl = `https://bidplus.gem.gov.in/${docLbl}/${bId}`;
 
       // Dates parsing
+      // Skip bids without a published closing date rather than inventing one.
+      if (!doc.final_end_date_sort?.[0]) return null;
       let startTime = doc.final_start_date_sort?.[0] ? new Date(doc.final_start_date_sort[0]) : new Date();
-      let endTime = doc.final_end_date_sort?.[0] ? new Date(doc.final_end_date_sort[0]) : new Date(Date.now() + 48 * 3600000);
+      const endTime = new Date(doc.final_end_date_sort[0]);
 
+      if (isNaN(endTime.getTime())) return null;
       if (isNaN(startTime.getTime())) startTime = new Date();
-      if (isNaN(endTime.getTime())) endTime = new Date(Date.now() + 48 * 3600000);
-      if (endTime.getTime() <= startTime.getTime()) {
-        endTime = new Date(startTime.getTime() + 48 * 3600000);
-      }
 
-      // Start Price estimation / value
+      // BidPlus listing data does not publish an estimated bid value, so price fields stay unknown.
       const isHighValue = Boolean(doc.is_high_value?.[0]);
-      const estimatedUnitPrice = this.estimateUnitPrice(rawCategory);
-      const startPrice = isHighValue ? Math.max(5000000, quantity * estimatedUnitPrice) : quantity * estimatedUnitPrice;
-      const emdAmount = Math.round(startPrice * 0.02); // Standard 2% EMD for government procurement bids
 
       const title = `${typeLabel}: ${rawCategory} (Qty: ${quantity.toLocaleString('en-IN')})`;
       const categoryName = this.inferCategory(rawCategory);
@@ -223,16 +212,8 @@ export class GemBidsProvider implements AuctionDataProvider {
           department: deptName,
           externalId: `ORG-GEM-BID-${bId}`
         },
-        location: {
-          country: 'India',
-          state: 'Delhi',
-          district: 'New Delhi',
-          city: 'New Delhi',
-          address: `${deptName}, ${minName}, New Delhi, India`
-        },
-        startPrice,
-        emdAmount,
-        bidIncrement: Math.max(1000, Math.round(startPrice * 0.005)),
+        // The listing does not include a delivery location; leave it unspecified.
+        startPrice: 0,
         startTime,
         endTime,
         officialUrl,
@@ -241,8 +222,7 @@ export class GemBidsProvider implements AuctionDataProvider {
             name: rawCategory,
             quantity,
             unit: 'Nos',
-            condition: 'New / Procured',
-            estimatedValue: startPrice
+            condition: 'New / Procured'
           }
         ],
         documents: [
@@ -266,21 +246,12 @@ export class GemBidsProvider implements AuctionDataProvider {
     }
   }
 
-  private estimateUnitPrice(category: string): number {
-    const c = category.toLowerCase();
-    if (c.includes('toilet') || c.includes('pond') || c.includes('construction') || c.includes('transformer')) return 450000;
-    if (c.includes('server') || c.includes('laptop') || c.includes('desktop') || c.includes('machine')) return 65000;
-    if (c.includes('needle') || c.includes('catheter') || c.includes('medical') || c.includes('drug')) return 120;
-    if (c.includes('vehicle') || c.includes('car') || c.includes('ambulance')) return 850000;
-    return 1500;
-  }
-
   private inferCategory(category: string): string {
     const c = category.toLowerCase();
     if (c.includes('needle') || c.includes('catheter') || c.includes('medical') || c.includes('health') || c.includes('hospital')) {
       return 'Medical & Healthcare Equipment';
     }
-    if (c.includes('server') || c.includes('laptop') || c.includes('desktop') || c.includes('switch') || c.includes('computer') || c.includes('it')) {
+    if (c.includes('server') || c.includes('laptop') || c.includes('desktop') || c.includes('switch') || c.includes('computer') || /\bit\b/.test(c)) {
       return 'IT & Electronics Equipment';
     }
     if (c.includes('vehicle') || c.includes('car') || c.includes('truck') || c.includes('ambulance')) {
@@ -296,108 +267,5 @@ export class GemBidsProvider implements AuctionDataProvider {
       return 'Ferrous & Non-Ferrous Scrap';
     }
     return 'General Surplus & Misc';
-  }
-
-  /**
-   * Verified sample catalog of real GeM procurement bids for offline fallback
-   */
-  private getVerifiedBidsCatalog(): RawAuctionDetail[] {
-    const now = new Date();
-
-    return [
-      {
-        externalId: 'GEM/2026/B/8001737',
-        title: 'Procurement Bid: Prefabricated Modular Community Toilet Units (Qty: 25)',
-        description: 'Official GeM National Procurement Bid published by Ministry of Defence for supply and turnkey installation of modular sanitation blocks.',
-        categoryName: 'Commercial & Residential Property',
-        organization: {
-          name: 'Ministry of Defence',
-          department: 'Department of Military Affairs',
-          externalId: 'ORG-GEM-BID-MOD'
-        },
-        location: {
-          country: 'India',
-          state: 'Delhi',
-          district: 'New Delhi',
-          city: 'New Delhi',
-          address: 'Sena Bhawan, South Block, New Delhi - 110011'
-        },
-        startPrice: 8750000,
-        emdAmount: 175000,
-        bidIncrement: 25000,
-        startTime: new Date(now.getTime() - 24 * 3600000),
-        endTime: new Date(now.getTime() + 72 * 3600000),
-        officialUrl: 'https://bidplus.gem.gov.in/showbidDocument/10058233',
-        items: [
-          { name: 'Prefabricated Modular Toilet Units (Heavy Duty Steel Frame)', quantity: 25, unit: 'Nos', condition: 'New / Factory Tested', estimatedValue: 8750000 }
-        ],
-        documents: [
-          { name: 'GeM_Bid_Notice_Modular_Toilet.pdf', documentType: 'TENDER_NOTICE', url: 'https://bidplus.gem.gov.in/showbidDocument/10058233' }
-        ],
-        rawData: { source: 'GEM_BIDS', verified: true }
-      },
-      {
-        externalId: 'GEM/2026/B/7914579',
-        title: 'Procurement Bid: Disposable Sterile Catheter Mount Connectors (Qty: 30,000)',
-        description: 'National public tender for procurement of ISO certified medical respiratory disposables for central government hospitals.',
-        categoryName: 'Medical & Healthcare Equipment',
-        organization: {
-          name: 'Ministry of Health and Family Welfare',
-          department: 'Department of Health and Family Welfare',
-          externalId: 'ORG-GEM-BID-MOHFW'
-        },
-        location: {
-          country: 'India',
-          state: 'Delhi',
-          district: 'New Delhi',
-          city: 'New Delhi',
-          address: 'Nirman Bhawan, Maulana Azad Road, New Delhi - 110011'
-        },
-        startPrice: 3600000,
-        emdAmount: 72000,
-        bidIncrement: 10000,
-        startTime: new Date(now.getTime() - 12 * 3600000),
-        endTime: new Date(now.getTime() + 48 * 3600000),
-        officialUrl: 'https://bidplus.gem.gov.in/showbidDocument/10055710',
-        items: [
-          { name: 'Sterile Catheter Mount with Dual Swivel Connector', quantity: 30000, unit: 'Nos', condition: 'New', estimatedValue: 3600000 }
-        ],
-        documents: [
-          { name: 'GeM_Bid_Notice_Catheter_Mount.pdf', documentType: 'TENDER_NOTICE', url: 'https://bidplus.gem.gov.in/showbidDocument/10055710' }
-        ],
-        rawData: { source: 'GEM_BIDS', verified: true }
-      },
-      {
-        externalId: 'GEM/2026/B/7981981',
-        title: 'Procurement Bid: Civil Construction & Lining of Rainwater Harvesting Ponds (Qty: 5)',
-        description: 'E-tender for excavation, geosynthetic membrane lining, and inlet/outlet works for campus rainwater storage systems.',
-        categoryName: 'Commercial & Residential Property',
-        organization: {
-          name: 'Ministry of Petroleum and Natural Gas',
-          department: 'Rajiv Gandhi Institute of Petroleum Technology',
-          externalId: 'ORG-GEM-BID-MOPNG'
-        },
-        location: {
-          country: 'India',
-          state: 'Uttar Pradesh',
-          district: 'Amethi',
-          city: 'Jais',
-          address: 'RGIPT Campus, Bahadurpur, Jais, Amethi - 229304'
-        },
-        startPrice: 2250000,
-        emdAmount: 45000,
-        bidIncrement: 15000,
-        startTime: new Date(now.getTime() - 8 * 3600000),
-        endTime: new Date(now.getTime() + 60 * 3600000),
-        officialUrl: 'https://bidplus.gem.gov.in/showbidDocument/10057455',
-        items: [
-          { name: 'Civil Construction of Rainwater Harvesting Pond with HDPE Geo-membrane', quantity: 5, unit: 'Nos', condition: 'Turnkey Works', estimatedValue: 2250000 }
-        ],
-        documents: [
-          { name: 'GeM_Bid_Notice_Rainwater_Pond.pdf', documentType: 'TENDER_NOTICE', url: 'https://bidplus.gem.gov.in/showbidDocument/10057455' }
-        ],
-        rawData: { source: 'GEM_BIDS', verified: true }
-      }
-    ];
   }
 }

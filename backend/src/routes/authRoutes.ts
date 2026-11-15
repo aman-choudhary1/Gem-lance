@@ -9,7 +9,7 @@ const router = Router();
 
 router.post('/register', authLimiter, validate(registerSchema), authController.register);
 router.post('/login', authLimiter, validate(loginSchema), authController.login);
-router.post('/refresh', authController.refreshToken);
+router.post('/refresh', authLimiter, authController.refreshToken);
 router.post('/logout', authController.logout);
 router.get('/me', authenticateJwt, authController.getMe);
 

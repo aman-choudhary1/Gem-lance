@@ -12,6 +12,7 @@
 > - We strictly index **publicly accessible** notices without bypassing authentication, CAPTCHA, rate-limits, or security controls.
 > - We **never** store user credentials, session cookies, or OTPs.
 > - We **do not automate bidding or place bids**. All bidding must occur directly on official government portals (e.g., [GeM Forward Auction](https://forwardauction.gem.gov.in/eprocure/home)).
+> - We **never invent data**. If a portal does not publish a price, location or closing date, the field is shown as *not disclosed* (or the record is skipped). Records from the built-in mock provider are labelled **SAMPLE DATA** everywhere in the UI.
 
 ---
 
@@ -155,6 +156,31 @@ cd ..
 > - **Industrial Buyer:** `buyer@auctionlens.io` / `BuyerPassword@2026`
 > *(One-click demo login buttons are also available on the Login screen)*
 
+> Demo-login buttons are shown only in development builds (`vite dev`); they are compiled out of production bundles.
+> The seed script reads `ADMIN_EMAIL` / `ADMIN_PASSWORD` and refuses to seed production with the default password.
+
+### Data modes (`DATA_PROVIDER`)
+
+| Value | Providers registered |
+|---|---|
+| `mock` *(default)* | Sample data only (labelled **SAMPLE DATA**) |
+| `live` | Real portals only (GeM, GeM Bids, CG State, GePNIC portals, MSTC adapter) |
+| `all` | Both |
+
+Other notable settings (see `.env.example`): `CORS_ORIGINS`, `TRUST_PROXY`, `GEPNIC_ALLOW_INSECURE_TLS`.
+In `NODE_ENV=production` the API refuses to start unless `JWT_SECRET` and `JWT_REFRESH_SECRET` are distinct random values of 32+ characters.
+
+### Upgrading an existing database
+
+The schema now stores undisclosed prices as `NULL` and versions refresh tokens. After pulling, run `npx prisma db push` in `backend/`.
+Data ingested by older builds contains estimated prices and invented catalog entries; inspect and repair it with:
+
+```bash
+cd backend
+npx ts-node scripts/repair-legacy-data.ts          # dry run
+npx ts-node scripts/repair-legacy-data.ts --apply  # apply
+```
+
 ### 4. Start Development Servers
 ```bash
 # In Root Directory (Runs frontend & backend concurrently):
@@ -175,8 +201,10 @@ npm --prefix frontend run dev
 To launch the full PostgreSQL, Redis, Backend, and Nginx-powered Frontend in containers:
 
 ```bash
+# Root .env must define JWT_SECRET and JWT_REFRESH_SECRET (openssl rand -hex 32); compose refuses to start otherwise.
 docker compose up -d
 ```
+The backend image includes Chromium (for the GeM scraper) and applies the Prisma schema on start. Postgres, Redis and the API are bound to `127.0.0.1` only.
 - **Frontend Web UI:** `http://localhost`
 - **Backend API:** `http://localhost:5000`
 - **Health Check:** `http://localhost:5000/api/health`
@@ -253,6 +281,10 @@ VALUES (cuid(), 'YOUR_CODE', 'Your Portal Name', 'https://portal.gov.in', true);
 | `GET` | `/api/notifications` | User alert notifications feed | User |
 | `GET` | `/api/admin/dashboard` | Scraper health & system telemetry | Admin |
 | `POST` | `/api/admin/scraper/run/:source` | Trigger on-demand pipeline ingestion | Admin |
+| `POST` | `/api/sources/:code/sync` | Ingest one portal now | Admin |
+| `POST` | `/api/sources/batch-sync` | Ingest several portals (`{ "codes": [...] }`) | Admin |
+| `POST` | `/api/auth/refresh` | Rotate access token from the refresh cookie | Cookie |
+| `POST` | `/api/auth/logout` | Clear cookie and revoke all refresh tokens for the user | Cookie |
 
 ---
 
@@ -268,6 +300,8 @@ The test suite validates:
 - ProviderRegistry multi-portal dispatch
 - Mock dataset integrity (50+ auctions)
 - Multi-field keyword and category search
+- Data integrity: no invented prices, locations or closing dates; unsafe document URLs dropped
+- Deterministic fallback IDs, IST date conversion, bounded concurrency, query validation (422 on bad input)
 
 ---
 

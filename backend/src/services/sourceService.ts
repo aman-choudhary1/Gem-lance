@@ -5,6 +5,8 @@ import { providerRegistry } from '../providers/base/ProviderRegistry';
 import { GEPNIC_PORTALS } from '../providers/gepnic/gepnicConfig';
 import { AuctionStatus } from '@prisma/client';
 
+const MAX_BATCH_SYNC_SOURCES = 40;
+
 export interface SiteAnalyticsItem {
   id: string;
   code: string;
@@ -107,7 +109,9 @@ export class SourceService {
       categoryGroups,
       stateGroups,
       recentJobs,
-      healthList
+      healthList,
+      liveBySourceGroups,
+      valueBySourceGroups
     ] = await Promise.all([
       prisma.auction.count(),
       prisma.auction.count({ where: { status: AuctionStatus.LIVE } }),
@@ -139,11 +143,9 @@ export class SourceService {
         orderBy: { auctions: { _count: 'desc' } },
         take: 8
       }),
-      prisma.location.groupBy({
-        by: ['state'],
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: 10
+      // Count auctions (not location rows) per state
+      prisma.location.findMany({
+        select: { state: true, _count: { select: { auctions: true } } }
       }),
       prisma.scrapeJob.findMany({
         take: 20,
@@ -152,8 +154,30 @@ export class SourceService {
           source: { select: { code: true, name: true } }
         }
       }),
-      providerRegistry.checkAllHealth().catch(() => [])
+      providerRegistry.checkAllHealth().catch(() => []),
+      prisma.auction.groupBy({
+        by: ['sourceId'],
+        where: { status: { in: [AuctionStatus.LIVE, AuctionStatus.ENDING_SOON] } },
+        _count: { id: true }
+      }),
+      prisma.auction.groupBy({
+        by: ['sourceId'],
+        _sum: { startPrice: true }
+      })
     ]);
+
+    const liveBySource = new Map(liveBySourceGroups.map((g) => [g.sourceId, g._count.id]));
+    const valueBySource = new Map(valueBySourceGroups.map((g) => [g.sourceId, Number(g._sum.startPrice || 0)]));
+
+    const stateTotals = new Map<string, number>();
+    for (const loc of stateGroups) {
+      const key = loc.state || 'Other';
+      stateTotals.set(key, (stateTotals.get(key) || 0) + loc._count.auctions);
+    }
+    const stateBreakdown = Array.from(stateTotals, ([state, count]) => ({ state, count }))
+      .filter((s) => s.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
 
     // Map portal configs for regional & state classification
     const portalConfigMap = new Map(GEPNIC_PORTALS.map((p) => [p.sourceCode, p]));
@@ -193,8 +217,8 @@ export class SourceService {
         region,
         state,
         auctionCount: s._count.auctions,
-        liveAuctionCount: 0, // Can be computed if needed
-        totalLotValue: 0,
+        liveAuctionCount: liveBySource.get(s.id) || 0,
+        totalLotValue: valueBySource.get(s.id) || 0,
         latestJob: latestJob
           ? {
               id: latestJob.id,
@@ -216,8 +240,10 @@ export class SourceService {
               message: health.message
             }
           : {
-              healthy: s._count.auctions > 0,
-              message: s._count.auctions > 0 ? 'Operational' : 'Ready for ingestion'
+              healthy: false,
+              message: providerRegistry.get(s.code)
+                ? 'Health not yet checked'
+                : 'Provider not active in the current DATA_PROVIDER mode'
             }
       };
     });
@@ -241,7 +267,7 @@ export class SourceService {
       sites,
       statusBreakdown: statusGroups.map((g) => ({ status: g.status, count: g._count.id })),
       categoryBreakdown: categoryGroups.map((c) => ({ name: c.name, count: c._count.auctions })),
-      stateBreakdown: stateGroups.map((sg) => ({ state: sg.state || 'Other', count: sg._count.id })),
+      stateBreakdown,
       recentJobs
     };
   }
@@ -257,9 +283,13 @@ export class SourceService {
    * Triggers batch sync across multiple priority sites
    */
   public async triggerBatchSync(codes?: string[]): Promise<PipelineSummary[]> {
-    const targetCodes = codes && codes.length > 0
-      ? codes
-      : ['CPPP', 'MAHA_TENDERS', 'UP_TENDERS', 'MP_TENDERS', 'DEFPROC', 'GEM_BIDS'];
+    const requested = Array.isArray(codes)
+      ? codes.filter((c): c is string => typeof c === 'string' && c.trim() !== '').map((c) => c.trim().toUpperCase())
+      : [];
+    const defaults = ['CPPP', 'MAHA_TENDERS', 'UP_TENDERS', 'MP_TENDERS', 'DEFPROC', 'GEM_BIDS'];
+    const targetCodes = [...new Set(requested.length > 0 ? requested : defaults)]
+      .filter((c) => providerRegistry.get(c))
+      .slice(0, MAX_BATCH_SYNC_SOURCES);
 
     const results: PipelineSummary[] = [];
     for (const code of targetCodes) {
@@ -288,7 +318,7 @@ export class SourceService {
    */
   public async getRecentJobs(limit = 20) {
     return prisma.scrapeJob.findMany({
-      take: limit,
+      take: clampLimit(limit, 20, 100),
       orderBy: { startedAt: 'desc' },
       include: {
         source: { select: { code: true, name: true } }
@@ -298,3 +328,9 @@ export class SourceService {
 }
 
 export const sourceService = new SourceService();
+
+export function clampLimit(value: unknown, fallback: number, max: number): number {
+  const n = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(Math.floor(n), max);
+}

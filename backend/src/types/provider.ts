@@ -38,7 +38,8 @@ export interface RawAuction {
   categoryName?: string;
   organization?: RawAuctionOrganization;
   location?: RawAuctionLocation;
-  startPrice: number;
+  /** Omit, or pass 0/null, when the portal does not publish a value. Never estimate. */
+  startPrice?: number | null;
   emdAmount?: number;
   bidIncrement?: number;
   startTime: Date | string;

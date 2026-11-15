@@ -5,6 +5,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { SourceBadge } from '../common/SourceBadge';
 import { CountdownTimer } from '../common/CountdownTimer';
 import { useAuth } from '../../context/AuthContext';
+import { useSaveAuction } from '../../hooks/useSaveAuction';
 import {
   formatCompactINR,
   formatDate,
@@ -26,7 +27,8 @@ interface AuctionCardProps {
 }
 
 export const AuctionCard: React.FC<AuctionCardProps> = ({ auction }) => {
-  const { user, savedAuctionIds, toggleSave } = useAuth();
+  const { savedAuctionIds } = useAuth();
+  const { toggle } = useSaveAuction();
   const [isSaving, setIsSaving] = useState(false);
 
   const isSaved = savedAuctionIds.has(auction.id);
@@ -34,15 +36,9 @@ export const AuctionCard: React.FC<AuctionCardProps> = ({ auction }) => {
   const handleBookmark = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) {
-      alert('Please sign in or use Demo Login to save auctions to your watchlist.');
-      return;
-    }
     setIsSaving(true);
     try {
-      await toggleSave(auction.id);
-    } catch (err) {
-      console.error(err);
+      await toggle(auction.id);
     } finally {
       setIsSaving(false);
     }

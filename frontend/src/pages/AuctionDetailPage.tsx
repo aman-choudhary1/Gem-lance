@@ -16,6 +16,8 @@ import {
   formatEmdAmount
 } from '../utils/formatters';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useSaveAuction } from '../hooks/useSaveAuction';
 import {
   ExternalLink,
   Bookmark,
@@ -29,12 +31,15 @@ import {
   Share2,
   ShieldCheck,
   CheckCircle2,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 
 export const AuctionDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { user, savedAuctionIds, toggleSave } = useAuth();
+  const { user, savedAuctionIds } = useAuth();
+  const { toggle } = useSaveAuction();
+  const { showToast } = useToast();
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -113,6 +118,19 @@ export const AuctionDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {auction.source.code.toUpperCase() === 'MOCK' && (
+        <div
+          role="note"
+          className="flex items-start gap-2.5 p-3.5 rounded-2xl border border-dashed border-yellow-500/50 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-800 dark:text-yellow-200 text-xs"
+        >
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            <strong>Sample data.</strong> This listing was generated for demonstration and is not a real auction notice.
+            Organisation names, prices and documents are illustrative only.
+          </span>
+        </div>
+      )}
+
       {/* Main Header Banner */}
       <div className="bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-sm dark:shadow-xl transition-colors">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -136,10 +154,7 @@ export const AuctionDetailPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => {
-                if (!user) return alert('Please sign in or use Demo Login to bookmark this auction.');
-                toggleSave(auction.id);
-              }}
+              onClick={() => toggle(auction.id)}
               className={`p-2 rounded-xl border transition flex items-center gap-1.5 text-xs font-medium ${
                 isSaved
                   ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40'
@@ -156,7 +171,7 @@ export const AuctionDetailPage: React.FC = () => {
           <div className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold mb-1">
             Auction ID: {auction.externalId}
           </div>
-          <h1 className="text-xl sm:text-3xl font-black text-slate-900 dark:white leading-snug">
+          <h1 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white leading-snug">
             {decodeHtmlEntities(auction.title)}
           </h1>
         </div>
@@ -453,15 +468,25 @@ export const AuctionDetailPage: React.FC = () => {
       <CreateAlertModal
         isOpen={alertModalOpen}
         onClose={() => setAlertModalOpen(false)}
-        onCreated={() => alert('Alert rule created successfully!')}
+        onCreated={() =>
+          showToast({
+            type: 'success',
+            title: 'Alert rule created',
+            message: 'You will be notified when new matching auctions are published.',
+            actionUrl: '/alerts',
+            actionLabel: 'Manage alerts'
+          })
+        }
         categories={categories}
         sources={sources}
         initialValues={{
           keywords: auction.title.split(' ').slice(0, 3).join(' '),
           category: auction.category?.id,
           state: auction.location?.state,
-          minPrice: Number(auction.startPrice) * 0.5,
-          maxPrice: Number(auction.startPrice) * 2
+          // Suggest a price band only when the source disclosed a price
+          ...(Number(auction.startPrice) > 0
+            ? { minPrice: Math.round(Number(auction.startPrice) * 0.5), maxPrice: Math.round(Number(auction.startPrice) * 2) }
+            : {})
         }}
       />
     </div>

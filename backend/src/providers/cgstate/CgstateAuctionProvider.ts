@@ -10,6 +10,8 @@ import {
 } from '../../types/provider';
 import { decodeHtmlEntities } from '../../utils/textUtils';
 import { logger } from '../../utils/logger';
+import { env } from '../../config/env';
+import { istToDate } from '../../utils/istDate';
 
 export class CgstateAuctionProvider implements AuctionDataProvider {
   public readonly sourceCode = 'CGSTATE';
@@ -33,8 +35,9 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
         'Accept-Language': 'en-US,en;q=0.9',
         'Cache-Control': 'no-cache'
       },
+      // TLS verification on by default; see GEPNIC_ALLOW_INSECURE_TLS in .env.example.
       httpsAgent: new https.Agent({
-        rejectUnauthorized: false
+        rejectUnauthorized: !env.GEPNIC_ALLOW_INSECURE_TLS
       })
     });
   }
@@ -84,7 +87,7 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
     } catch (error) {
       this.lastError = (error as Error).message;
       logger.error(`[CgstateProvider] Scrape error: ${this.lastError}`);
-      return [];
+      throw error;
     }
   }
 
@@ -187,8 +190,10 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
         if (!title || (!rfqId && !tenderNo)) continue;
 
         const externalId = rfqId || tenderNo;
-        const closingDate = this.parseCgDate(dueStr) || new Date(Date.now() + 14 * 24 * 3600000);
-        const startingDate = this.parseCgDate(startStr) || new Date(closingDate.getTime() - 14 * 24 * 3600000);
+        const closingDate = this.parseCgDate(dueStr);
+        // Skip tenders without a published due date rather than inventing one.
+        if (!closingDate) continue;
+        const startingDate = this.parseCgDate(startStr) || new Date();
 
         const decodedTitle = decodeHtmlEntities(title);
         const decodedDept = decodeHtmlEntities(currentDept);
@@ -203,10 +208,9 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
             name: decodedDept,
             department: decodedDept
           },
+          // The listing gives no work location beyond the state.
           location: {
             state: 'Chhattisgarh',
-            city: 'Raipur',
-            address: 'Chhattisgarh, India',
             country: 'India'
           },
           startPrice: pac,
@@ -262,7 +266,7 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
       if (ampm === 'PM' && hour < 12) hour += 12;
       if (ampm === 'AM' && hour === 12) hour = 0;
 
-      return new Date(Date.UTC(year, month, day, hour, minute));
+      return istToDate(year, month, day, hour, minute);
     }
 
     // Pattern 2: "DD/MM/YYYY"
@@ -271,7 +275,7 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
       const day = parseInt(m2[1]!, 10);
       const month = parseInt(m2[2]!, 10) - 1;
       const year = parseInt(m2[3]!, 10);
-      return new Date(Date.UTC(year, month, day, 17, 0));
+      return istToDate(year, month, day, 17, 0);
     }
 
     return null;

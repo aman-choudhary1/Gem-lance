@@ -42,6 +42,7 @@ model User {
   email         String         @unique
   passwordHash  String
   role          Role           @default(USER)
+  tokenVersion  Int            @default(0) // bumped on logout to revoke outstanding refresh tokens
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -138,7 +139,7 @@ model Auction {
   status         AuctionStatus   @default(UPCOMING)
   sourceStatus   String?         // Original raw status from portal
   
-  startPrice     Decimal         @default(0) @db.Decimal(14, 2)
+  startPrice     Decimal?        @db.Decimal(14, 2) // null = not disclosed by the source portal
   emdAmount      Decimal?        @db.Decimal(14, 2)
   bidIncrement   Decimal?        @db.Decimal(14, 2)
 

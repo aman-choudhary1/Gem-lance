@@ -1,5 +1,5 @@
 import { app } from './app';
-import { env } from './config/env';
+import { env, mockDataEnabled, liveDataEnabled } from './config/env';
 import { logger } from './utils/logger';
 import { prisma } from './config/prisma';
 import { providerRegistry } from './providers/base/ProviderRegistry';
@@ -17,22 +17,23 @@ async function bootstrap() {
   try {
     logger.info(`Starting AuctionLens Backend Server...`);
 
-    // 1. Register Data Providers in ProviderRegistry
-    const mockProvider = new MockAuctionProvider();
-    const gemProvider = new GemAuctionProvider();
-    const gemBidsProvider = new GemBidsProvider();
-    const mstcProvider = new MstcAuctionProvider();
-    const cgstateProvider = new CgstateAuctionProvider();
+    // 1. Register Data Providers in ProviderRegistry (controlled by DATA_PROVIDER=mock|live|all)
+    logger.info(`Data mode: ${env.DATA_PROVIDER} (sample data ${mockDataEnabled ? 'ON' : 'OFF'}, live portals ${liveDataEnabled ? 'ON' : 'OFF'})`);
 
-    providerRegistry.register(mockProvider);
-    providerRegistry.register(gemProvider);
-    providerRegistry.register(gemBidsProvider);
-    providerRegistry.register(mstcProvider);
-    providerRegistry.register(cgstateProvider);
+    if (mockDataEnabled) {
+      providerRegistry.register(new MockAuctionProvider());
+    }
 
-    // Register all 29 Indian GePNIC Central, State, and UT portals
-    for (const portalConfig of GEPNIC_PORTALS) {
-      providerRegistry.register(new GepnicProvider(portalConfig));
+    if (liveDataEnabled) {
+      providerRegistry.register(new GemAuctionProvider());
+      providerRegistry.register(new GemBidsProvider());
+      providerRegistry.register(new MstcAuctionProvider());
+      providerRegistry.register(new CgstateAuctionProvider());
+
+      // Register all GePNIC Central, State, and UT portals
+      for (const portalConfig of GEPNIC_PORTALS) {
+        providerRegistry.register(new GepnicProvider(portalConfig));
+      }
     }
 
     // 2. Initialize Database Connection
@@ -45,11 +46,12 @@ async function bootstrap() {
     // 4. Auto-populate initial data on cold start if table is empty
     const auctionCount = await prisma.auction.count();
     if (auctionCount === 0) {
-      logger.info('Running initial ingestion from registered providers (MOCK, GEM, CPPP)...');
+      const initialSources = ['MOCK', 'GEM', 'CPPP'].filter((code) => providerRegistry.get(code));
+      logger.info(`Running initial ingestion from registered providers (${initialSources.join(', ')})...`);
       try {
-        await runScraperPipeline('MOCK');
-        await runScraperPipeline('GEM');
-        await runScraperPipeline('CPPP');
+        for (const code of initialSources) {
+          await runScraperPipeline(code);
+        }
         logger.info('Initial data ingestion complete.');
       } catch (ingestErr) {
         logger.warn(`Initial ingestion note: ${(ingestErr as Error).message}`);

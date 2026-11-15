@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Auction } from '../../types';
 import { CountdownTimer } from '../common/CountdownTimer';
 import { SourceBadge } from '../common/SourceBadge';
-import { formatCompactINR } from '../../utils/formatters';
+import { formatCompactTenderPrice } from '../../utils/formatters';
 import { Clock, Flame, ChevronRight } from 'lucide-react';
 
 interface EndingSoonRailProps {
@@ -63,7 +63,7 @@ export const EndingSoonRail: React.FC<EndingSoonRailProps> = ({ auctions }) => {
               <div>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 block uppercase font-medium">Starting Price</span>
                 <span className="text-sm font-extrabold text-slate-900 dark:text-slate-100 font-mono">
-                  {formatCompactINR(a.startPrice)}
+                  {formatCompactTenderPrice(a.startPrice)}
                 </span>
               </div>
               <Link

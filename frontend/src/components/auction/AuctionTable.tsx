@@ -5,6 +5,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { SourceBadge } from '../common/SourceBadge';
 import { CountdownTimer } from '../common/CountdownTimer';
 import { useAuth } from '../../context/AuthContext';
+import { useSaveAuction } from '../../hooks/useSaveAuction';
 import {
   formatCompactINR,
   formatDate,
@@ -19,7 +20,8 @@ interface AuctionTableProps {
 }
 
 export const AuctionTable: React.FC<AuctionTableProps> = ({ auctions }) => {
-  const { user, savedAuctionIds, toggleSave } = useAuth();
+  const { savedAuctionIds } = useAuth();
+  const { toggle } = useSaveAuction();
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm dark:shadow-none transition-colors">
@@ -106,10 +108,7 @@ export const AuctionTable: React.FC<AuctionTableProps> = ({ auctions }) => {
                 {/* Actions */}
                 <td className="py-4 px-4 align-top text-right space-x-2">
                   <button
-                    onClick={() => {
-                      if (!user) return alert('Please log in to save auctions');
-                      toggleSave(a.id);
-                    }}
+                    onClick={() => toggle(a.id)}
                     aria-label={isSaved ? 'Remove from saved' : 'Save auction'}
                     className={`p-1.5 rounded-lg border transition ${
                       isSaved

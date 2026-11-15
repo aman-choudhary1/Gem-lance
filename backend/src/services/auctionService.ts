@@ -118,10 +118,10 @@ export class AuctionService {
         orderBy = { endTime: 'asc' };
         break;
       case 'highestPrice':
-        orderBy = { startPrice: 'desc' };
+        orderBy = { startPrice: { sort: 'desc', nulls: 'last' } };
         break;
       case 'lowestPrice':
-        orderBy = { startPrice: 'asc' };
+        orderBy = { startPrice: { sort: 'asc', nulls: 'last' } };
         break;
       case 'recentlyUpdated':
         orderBy = { updatedAt: 'desc' };

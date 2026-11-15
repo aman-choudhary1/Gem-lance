@@ -8,13 +8,24 @@ const envSchema = z.object({
   PORT: z.string().transform(Number).default('5000'),
   DATABASE_URL: z.string().default('postgresql://postgres:postgres@localhost:5432/auctionlens?schema=public'),
   FRONTEND_URL: z.string().default('http://localhost:5173'),
+  // Extra comma-separated origins allowed by CORS (FRONTEND_URL is always allowed).
+  CORS_ORIGINS: z
+    .string()
+    .optional()
+    .transform((val) => (val ? val.split(',').map((o) => o.trim()).filter(Boolean) : [])),
   
   JWT_SECRET: z.string().default('auctionlens-super-secret-jwt-key-change-in-production-2026'),
   JWT_REFRESH_SECRET: z.string().default('auctionlens-super-refresh-secret-jwt-key-2026'),
   JWT_EXPIRES_IN: z.string().default('1d'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
-  DATA_PROVIDER: z.enum(['mock', 'gem', 'all']).default('mock'),
+  // mock = sample data only, live = real portals only, all = both. "gem" is a legacy alias for "live".
+  DATA_PROVIDER: z.preprocess(
+    (val) => (val === 'gem' ? 'live' : val),
+    z.enum(['mock', 'live', 'all']).default('mock')
+  ),
+  GEPNIC_ALLOW_INSECURE_TLS: z.string().optional().transform((val) => val === 'true'),
+  TRUST_PROXY: z.string().optional().transform((val) => val === 'true'),
   SCRAPER_ENABLED: z.string().transform((val) => val === 'true').default('true'),
   SCRAPE_INTERVAL_MINUTES: z.string().transform(Number).default('30'),
   
@@ -35,4 +46,27 @@ if (!parsedEnv.success) {
   process.exit(1);
 }
 
+const DEV_SECRET_PREFIX = 'auctionlens-';
+
+if (parsedEnv.data.NODE_ENV === 'production') {
+  const weak = (['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const).filter((key) => {
+    const value = parsedEnv.data[key];
+    return value.length < 32 || value.startsWith(DEV_SECRET_PREFIX);
+  });
+  if (weak.length > 0) {
+    console.error(
+      `❌ Refusing to start in production: ${weak.join(', ')} must be set to a random value of at least 32 characters ` +
+        `(e.g. \`openssl rand -hex 32\`).`
+    );
+    process.exit(1);
+  }
+  if (parsedEnv.data.JWT_SECRET === parsedEnv.data.JWT_REFRESH_SECRET) {
+    console.error('❌ Refusing to start in production: JWT_SECRET and JWT_REFRESH_SECRET must differ.');
+    process.exit(1);
+  }
+}
+
 export const env = parsedEnv.data;
+
+export const mockDataEnabled = env.DATA_PROVIDER === 'mock' || env.DATA_PROVIDER === 'all';
+export const liveDataEnabled = env.DATA_PROVIDER === 'live' || env.DATA_PROVIDER === 'all';

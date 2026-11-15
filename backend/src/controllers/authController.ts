@@ -1,5 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
+import { CookieOptions } from 'express';
 import { authService } from '../services/authService';
+import { env } from '../config/env';
+
+const REFRESH_COOKIE = 'refreshToken';
+const refreshCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/api/auth',
+  maxAge: 7 * 24 * 60 * 60 * 1000
+};
 
 export class AuthController {
   public async register(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -7,12 +18,7 @@ export class AuthController {
       const result = await authService.register(req.body);
 
       // Set HTTP-only refresh token cookie
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      res.cookie(REFRESH_COOKIE, result.refreshToken, refreshCookieOptions);
 
       res.status(201).json({
         success: true,
@@ -30,12 +36,7 @@ export class AuthController {
     try {
       const result = await authService.login(req.body);
 
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      res.cookie(REFRESH_COOKIE, result.refreshToken, refreshCookieOptions);
 
       res.status(200).json({
         success: true,
@@ -51,15 +52,10 @@ export class AuthController {
 
   public async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const token = req.cookies.refreshToken || req.body.refreshToken;
+      const token: string | undefined = req.cookies?.[REFRESH_COOKIE];
       const result = await authService.refreshToken(token);
 
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      res.cookie(REFRESH_COOKIE, result.refreshToken, refreshCookieOptions);
 
       res.status(200).json({
         success: true,
@@ -74,7 +70,11 @@ export class AuthController {
   }
 
   public async logout(req: Request, res: Response): Promise<void> {
-    res.clearCookie('refreshToken');
+    await authService.revokeRefreshToken(req.cookies?.[REFRESH_COOKIE]);
+    const { maxAge: _maxAge, ...clearOptions } = refreshCookieOptions;
+    res.clearCookie(REFRESH_COOKIE, clearOptions);
+    // Also clear any cookie set by older builds at the default path.
+    res.clearCookie(REFRESH_COOKIE);
     res.status(200).json({
       success: true,
       data: { message: 'Logged out successfully' }

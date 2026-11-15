@@ -1,6 +1,6 @@
 export function formatCurrencyINR(amount: number | string | null | undefined): string {
   if (amount === null || amount === undefined || isNaN(Number(amount))) {
-    return '₹0';
+    return '—';
   }
   const num = Number(amount);
   return new Intl.NumberFormat('en-IN', {
@@ -12,7 +12,7 @@ export function formatCurrencyINR(amount: number | string | null | undefined): s
 
 export function formatCompactINR(amount: number | string | null | undefined): string {
   if (amount === null || amount === undefined || isNaN(Number(amount))) {
-    return '₹0';
+    return '—';
   }
   const num = Number(amount);
   if (num >= 10000000) {
@@ -77,6 +77,7 @@ export function formatDate(dateString: string | Date | null | undefined): string
 export function formatRelativeTime(dateString: string | Date | null | undefined): string {
   if (!dateString) return '';
   const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffSec = Math.floor(diffMs / 1000);

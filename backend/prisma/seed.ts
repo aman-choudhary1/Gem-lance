@@ -7,6 +7,11 @@ import { GemAuctionProvider } from '../src/providers/gem/GemAuctionProvider';
 import { GemBidsProvider } from '../src/providers/gem/GemBidsProvider';
 import { MstcAuctionProvider } from '../src/providers/mstc/MstcAuctionProvider';
 import { runScraperPipeline } from '../src/scraper/pipeline';
+import { env, mockDataEnabled, liveDataEnabled } from '../src/config/env';
+
+const DEV_ADMIN_PASSWORD = 'AdminPassword@2026';
+const DEMO_BUYER_PASSWORD = 'BuyerPassword@2026';
+const isProduction = env.NODE_ENV === 'production';
 
 const prisma = new PrismaClient();
 
@@ -74,20 +79,31 @@ async function main() {
 
   // 3. Seed Admin & Test Users
   console.log('👥 Seeding Users...');
-  const adminPasswordHash = await bcrypt.hash('AdminPassword@2026', 10);
-  const buyerPasswordHash = await bcrypt.hash('BuyerPassword@2026', 10);
+  if (isProduction && env.ADMIN_PASSWORD === DEV_ADMIN_PASSWORD) {
+    throw new Error('Set ADMIN_PASSWORD to a strong, non-default value before seeding a production database.');
+  }
+  const adminEmail = env.ADMIN_EMAIL.toLowerCase();
+  const adminPasswordHash = await bcrypt.hash(env.ADMIN_PASSWORD, 10);
 
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@auctionlens.io' },
+  await prisma.user.upsert({
+    where: { email: adminEmail },
     update: {},
     create: {
-      name: 'AuctionLens Administrator',
-      email: 'admin@auctionlens.io',
+      name: env.ADMIN_NAME,
+      email: adminEmail,
       passwordHash: adminPasswordHash,
       role: Role.ADMIN
     }
   });
 
+  // The demo buyer account and its sample alerts are development-only.
+  if (isProduction) {
+    console.log('✅ Production seed completed (no demo accounts or sample data created).');
+    console.log(`   Admin Login: ${adminEmail}`);
+    return;
+  }
+
+  const buyerPasswordHash = await bcrypt.hash(DEMO_BUYER_PASSWORD, 10);
   const demoBuyer = await prisma.user.upsert({
     where: { email: 'buyer@auctionlens.io' },
     update: {},
@@ -99,19 +115,26 @@ async function main() {
     }
   });
 
-  // 4. Ingest Mock Provider Dataset (50+ auctions)
-  console.log('📥 Ingesting 50+ Multi-Portal Auctions via Pipeline...');
-  providerRegistry.register(new MockAuctionProvider());
-  providerRegistry.register(new GemAuctionProvider());
-  providerRegistry.register(new GemBidsProvider());
-  providerRegistry.register(new MstcAuctionProvider());
-
-  await runScraperPipeline('MOCK');
-  await runScraperPipeline('GEM');
-  await runScraperPipeline('GEM_BIDS');
+  // 4. Ingest data according to DATA_PROVIDER (mock = sample data, live = real portals, all = both)
+  console.log(`📥 Ingesting auctions via pipeline (DATA_PROVIDER=${env.DATA_PROVIDER})...`);
+  if (mockDataEnabled) {
+    providerRegistry.register(new MockAuctionProvider());
+    await runScraperPipeline('MOCK');
+  }
+  if (liveDataEnabled) {
+    providerRegistry.register(new GemAuctionProvider());
+    providerRegistry.register(new GemBidsProvider());
+    providerRegistry.register(new MstcAuctionProvider());
+    for (const code of ['GEM', 'GEM_BIDS']) {
+      const summary = await runScraperPipeline(code);
+      console.log(`   ${code}: ${summary.status} (${summary.recordsCreated} created)${summary.errorMessage ? ` – ${summary.errorMessage}` : ''}`);
+    }
+  }
 
   // 5. Seed User Alerts & Bookmarks for Demo Buyer
   console.log('🔔 Seeding Sample Alerts and Bookmarks...');
+  // Re-running the seed must not duplicate the demo buyer's alerts.
+  await prisma.auctionAlert.deleteMany({ where: { userId: demoBuyer.id } });
   const alert1 = await prisma.auctionAlert.create({
     data: {
       userId: demoBuyer.id,
@@ -124,7 +147,7 @@ async function main() {
     }
   });
 
-  const alert2 = await prisma.auctionAlert.create({
+  await prisma.auctionAlert.create({
     data: {
       userId: demoBuyer.id,
       name: 'Ferrous Scrap & Metal Lots',
@@ -136,6 +159,7 @@ async function main() {
   });
 
   // Bookmark a couple of auctions for demo buyer
+  await prisma.notification.deleteMany({ where: { userId: demoBuyer.id } });
   const sampleAuctions = await prisma.auction.findMany({ take: 3 });
   for (const a of sampleAuctions) {
     await prisma.savedAuction.upsert({
@@ -162,8 +186,8 @@ async function main() {
   }
 
   console.log('✅ Database seed completed successfully!');
-  console.log(`   Admin Login: admin@auctionlens.io / AdminPassword@2026`);
-  console.log(`   Buyer Login: buyer@auctionlens.io / BuyerPassword@2026`);
+  console.log(`   Admin Login: ${adminEmail}${env.ADMIN_PASSWORD === DEV_ADMIN_PASSWORD ? ` / ${DEV_ADMIN_PASSWORD}` : ''}`);
+  console.log(`   Buyer Login: buyer@auctionlens.io / ${DEMO_BUYER_PASSWORD}`);
 }
 
 main()

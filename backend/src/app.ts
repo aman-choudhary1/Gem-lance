@@ -11,26 +11,27 @@ import { prisma } from './config/prisma';
 
 export const app = express();
 
+// Behind nginx / a load balancer, use X-Forwarded-For so rate limits apply per client, not per proxy.
+if (env.TRUST_PROXY) {
+  app.set('trust proxy', 1);
+}
+
 // Security Headers
 app.use(helmet());
 
 // CORS Configuration
-const allowedOrigins = [
-  env.FRONTEND_URL,
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://localhost:80',
-  'http://127.0.0.1:5173'
-];
+const devOrigins =
+  env.NODE_ENV === 'production'
+    ? []
+    : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost', 'http://127.0.0.1:5173'];
+const allowedOrigins = new Set([env.FRONTEND_URL, ...env.CORS_ORIGINS, ...devOrigins]);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, true); // Permissive in development for seamless local dev
-      }
+      // Requests without an Origin header (curl, server-to-server, same-origin via proxy) are allowed;
+      // browsers on other origins are not.
+      callback(null, !origin || allowedOrigins.has(origin));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
