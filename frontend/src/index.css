@@ -40,7 +40,8 @@
   }
 
   h1, h2, h3 {
-    @apply font-display;
+    /* plain CSS (not @apply) so it works even if a dev server still has an older tailwind.config loaded */
+    font-family: 'Sora', 'Inter', system-ui, sans-serif;
     letter-spacing: -0.02em;
   }
 
