@@ -1,5 +1,6 @@
 import { Prisma, AuctionStatus } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { stateKey } from './locationService';
 import { AuctionFilterParams, PaginatedResult } from '../types/auction';
 import { AppError } from '../middleware/errorHandler';
 
@@ -52,9 +53,14 @@ export class AuctionService {
 
     // 4. Location Filters
     if (params.state) {
+      // match every stored spelling of the state (case / stray whitespace variants)
+      const wanted = stateKey(params.state);
+      const spellings = (await prisma.location.findMany({ distinct: ['state'], select: { state: true } }))
+        .map((l) => l.state)
+        .filter((st) => stateKey(st) === wanted);
       where.location = {
         ...(where.location as Prisma.LocationWhereInput || {}),
-        state: { equals: params.state, mode: 'insensitive' }
+        state: { in: spellings.length ? spellings : [params.state] }
       };
     }
 
