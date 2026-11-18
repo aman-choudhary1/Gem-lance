@@ -3,6 +3,12 @@ import { prisma } from '../config/prisma';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { AppError } from '../middleware/errorHandler';
 import { Role } from '@prisma/client';
+import { createHash, randomBytes } from 'crypto';
+import { env } from '../config/env';
+import { logger } from '../utils/logger';
+import { sendPasswordResetEmail } from './emailService';
+
+const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 
 export class AuthService {
   public async register(data: { name: string; email: string; password: string }) {
@@ -102,6 +108,57 @@ export class AuthService {
     } catch {
       // ignore
     }
+  }
+
+  /**
+   * Starts a password reset. Always resolves quietly so callers cannot tell whether an
+   * account exists for the address.
+   */
+  public async requestPasswordReset(email: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) return;
+
+    const token = randomBytes(32).toString('hex');
+    await prisma.$transaction([
+      prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),
+      prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: sha256(token),
+          expiresAt: new Date(Date.now() + env.RESET_TOKEN_TTL_MINUTES * 60 * 1000)
+        }
+      })
+    ]);
+
+    const link = `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${token}`;
+    try {
+      await sendPasswordResetEmail(user.email, user.name, link);
+    } catch (err) {
+      // Never surface delivery problems: that would reveal which addresses are registered.
+      logger.error(`Password reset email failed: ${(err as Error).message}`);
+    }
+  }
+
+  /** Sets a new password from an emailed token (single use) and signs out every session. */
+  public async resetPassword(token: string, newPassword: string): Promise<void> {
+    const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new AppError('This reset link is invalid or has expired. Please request a new one.', 400, 'INVALID_RESET_TOKEN');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    // Claim the token atomically so two simultaneous requests cannot both succeed.
+    const claimed = await prisma.passwordResetToken.updateMany({
+      where: { id: record.id, usedAt: null },
+      data: { usedAt: new Date() }
+    });
+    if (claimed.count === 0) {
+      throw new AppError('This reset link is invalid or has expired. Please request a new one.', 400, 'INVALID_RESET_TOKEN');
+    }
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: record.userId }, data: { passwordHash, tokenVersion: { increment: 1 } } }),
+      prisma.passwordResetToken.deleteMany({ where: { userId: record.userId, id: { not: record.id } } })
+    ]);
   }
 
   public async getCurrentUser(userId: string) {

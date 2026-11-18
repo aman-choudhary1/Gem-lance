@@ -8,6 +8,7 @@ import { CountdownTimer } from '../common/CountdownTimer';
 import { useAuth } from '../../context/AuthContext';
 import { useSaveAuction } from '../../hooks/useSaveAuction';
 import { useSpotlight } from '../../hooks/useSpotlight';
+import { CompareButton } from '../compare/CompareButton';
 import { fadeUp } from '../motion/variants';
 import { formatDate, decodeHtmlEntities, formatCompactTenderPrice, formatEmdAmount } from '../../utils/formatters';
 import { Building2, MapPin, Bookmark, Layers, ArrowUpRight } from 'lucide-react';
@@ -71,6 +72,7 @@ export const AuctionCard: React.FC<AuctionCardProps> = ({ auction }) => {
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <StatusBadge status={auction.status} />
+            <CompareButton auction={auction} />
             <m.button
               whileTap={{ scale: 0.8 }}
               onClick={handleBookmark}

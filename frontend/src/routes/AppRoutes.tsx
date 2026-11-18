@@ -18,11 +18,15 @@ const AnalyticsReportingPage = page(() => import('../pages/AnalyticsReportingPag
 const CategoriesPage = page(() => import('../pages/CategoriesPage'), 'CategoriesPage');
 const LocationsPage = page(() => import('../pages/LocationsPage'), 'LocationsPage');
 const SavedAuctionsPage = page(() => import('../pages/SavedAuctionsPage'), 'SavedAuctionsPage');
+const ComparePage = page(() => import('../pages/ComparePage'), 'ComparePage');
+const InterestsPage = page(() => import('../pages/InterestsPage'), 'InterestsPage');
 const AlertsPage = page(() => import('../pages/AlertsPage'), 'AlertsPage');
 const NotificationsPage = page(() => import('../pages/NotificationsPage'), 'NotificationsPage');
 const AdminPage = page(() => import('../pages/AdminPage'), 'AdminPage');
 const LoginPage = page(() => import('../pages/LoginPage'), 'LoginPage');
 const RegisterPage = page(() => import('../pages/RegisterPage'), 'RegisterPage');
+const ForgotPasswordPage = page(() => import('../pages/ForgotPasswordPage'), 'ForgotPasswordPage');
+const ResetPasswordPage = page(() => import('../pages/ResetPasswordPage'), 'ResetPasswordPage');
 
 const AuthFallback: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950" role="status" aria-label="Loading">
@@ -51,6 +55,23 @@ export const AppRoutes: React.FC = () => {
         }
       />
 
+      <Route
+        path="/forgot-password"
+        element={
+          <Suspense fallback={<AuthFallback />}>
+            <ForgotPasswordPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <Suspense fallback={<AuthFallback />}>
+            <ResetPasswordPage />
+          </Suspense>
+        }
+      />
+
       <Route element={<MainLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/auctions" element={<AuctionsPage />} />
@@ -61,8 +82,10 @@ export const AppRoutes: React.FC = () => {
         <Route path="/analytics" element={<AnalyticsReportingPage />} />
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/locations" element={<LocationsPage />} />
+        <Route path="/compare" element={<ComparePage />} />
         <Route path="/saved" element={<SavedAuctionsPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/interests" element={<InterestsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<NotFoundPage />} />

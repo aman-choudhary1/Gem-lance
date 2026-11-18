@@ -5,6 +5,7 @@ import { prisma } from '../config/prisma';
 import { runAllEnabledScrapers } from '../scraper/pipeline';
 import { calculateAuctionStatus } from '../utils/statusCalculator';
 import { logger } from '../utils/logger';
+import { sendClosingSoonReminders } from '../services/reminderService';
 
 export class ScraperScheduler {
   private static instance: ScraperScheduler;
@@ -52,6 +53,15 @@ export class ScraperScheduler {
         await this.syncAuctionStatuses();
       } catch (error) {
         logger.error(`Status sync failed: ${(error as Error).message}`);
+      }
+    });
+
+    // Closing-soon reminders for saved notices (every 15 minutes)
+    cron.schedule('*/15 * * * *', async () => {
+      try {
+        await sendClosingSoonReminders();
+      } catch (error) {
+        logger.error(`Closing-soon reminders failed: ${(error as Error).message}`);
       }
     });
 

@@ -75,7 +75,53 @@ export interface PipelineSummaryResult {
   errorMessage?: string;
 }
 
+export interface FullFetchResult extends PipelineSummaryResult {
+  pagesRead: number;
+  totalPages: number | null;
+  rows: number;
+  incomplete: boolean;
+}
+
+/** The portal wants a person to type a code (at the start, after a wrong code, or every few pages). */
+export interface FullFetchCodeStep {
+  status: 'needs_code';
+  sessionId: string;
+  code: string;
+  expiresAt: string;
+  reason: 'start' | 'rejected' | 'rechallenge';
+  pagesRead: number;
+  totalPages: number | null;
+  rows: number;
+}
+
+export type FullFetchStepResult = FullFetchCodeStep | (FullFetchResult & { status: 'SUCCESS' | 'PARTIAL' | 'FAILED' });
+
+export interface FullFetchProgress {
+  running: boolean;
+  pagesRead: number;
+  totalPages: number | null;
+  rows: number;
+  startedAt: string;
+}
+
 export const sourceService = {
+  /** Chhattisgarh full fetch, step 1: the portal's authentication code for a new session. */
+  async startCgFullFetch(): Promise<FullFetchCodeStep> {
+    const res = await api.post('/sources/cgstate/full-fetch/start');
+    return res.data.data;
+  },
+
+  /** Step 2 (repeatable): submit the code the admin typed. Returns the next code to type, or the import result. */
+  async submitCgFullFetchCode(sessionId: string, code: string): Promise<FullFetchStepResult> {
+    const res = await api.post('/sources/cgstate/full-fetch/submit', { sessionId, code });
+    return res.data.data;
+  },
+
+  async getCgFullFetchProgress(): Promise<FullFetchProgress | null> {
+    const res = await api.get('/sources/cgstate/full-fetch/progress');
+    return res.data.data;
+  },
+
   async getAllSources(): Promise<AuctionSource[]> {
     const res = await api.get('/sources');
     return res.data.data;

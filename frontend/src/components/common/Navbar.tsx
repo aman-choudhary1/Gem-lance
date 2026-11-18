@@ -13,6 +13,7 @@ import {
   Clock,
   Bookmark,
   Bell,
+  Sparkles,
   Layers,
   ShieldCheck,
   LogOut,
@@ -375,6 +376,7 @@ export const Navbar: React.FC = () => {
                       </div>
                       {[
                         { to: '/saved', icon: Bookmark, label: `Saved auctions (${savedAuctionIds.size})`, color: 'text-emerald-500' },
+                        { to: '/interests', icon: Sparkles, label: 'My interests', color: 'text-fuchsia-500' },
                         { to: '/alerts', icon: Bell, label: 'Alert rules', color: 'text-amber-500' },
                         { to: '/notifications', icon: CheckCheck, label: 'Notifications', color: 'text-sky-500' },
                         ...(user.role === 'ADMIN' ? [{ to: '/admin', icon: ShieldCheck, label: 'Admin dashboard', color: 'text-violet-500' }] : [])
@@ -456,6 +458,9 @@ export const Navbar: React.FC = () => {
                 <>
                   <Link to="/saved" className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-900/5 dark:hover:bg-white/5">
                     <Bookmark className="w-[18px] h-[18px]" /> Saved ({savedAuctionIds.size})
+                  </Link>
+                  <Link to="/interests" className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-900/5 dark:hover:bg-white/5">
+                    <Sparkles className="w-[18px] h-[18px]" /> My interests
                   </Link>
                   <Link to="/alerts" className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-900/5 dark:hover:bg-white/5">
                     <Bell className="w-[18px] h-[18px]" /> Alerts

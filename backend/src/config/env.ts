@@ -33,6 +33,15 @@ const envSchema = z.object({
   MSTC_BASE_URL: z.string().default('https://www.mstcecommerce.com'),
   
   REDIS_URL: z.string().optional(),
+
+  // Outgoing email (password reset, later alerts). Without SMTP_HOST, emails are only logged.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().transform(Number).default('587'),
+  SMTP_SECURE: z.string().optional().transform((val) => val === 'true'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_FROM: z.string().default('AuctionLens <no-reply@auctionlens.io>'),
+  RESET_TOKEN_TTL_MINUTES: z.string().transform(Number).default('30'),
   
   ADMIN_EMAIL: z.string().email().default('admin@auctionlens.io'),
   ADMIN_PASSWORD: z.string().default('AdminPassword@2026'),

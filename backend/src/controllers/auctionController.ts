@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { auctionService } from '../services/auctionService';
+import { getForYou } from '../services/feedService';
 
 export class AuctionController {
   public async getAuctions(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -52,6 +53,16 @@ export class AuctionController {
         success: true,
         data: auctions
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public async getForYou(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const limit = Math.min(30, Math.max(1, parseInt((req.query.limit as string) || '12', 10) || 12));
+      const feed = await getForYou(req.user!.id, limit);
+      res.status(200).json({ success: true, ...feed });
     } catch (error) {
       next(error);
     }

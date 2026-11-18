@@ -52,7 +52,7 @@ export const RegisterPage: React.FC = () => {
     setIsLoading(true);
     try {
       await register(name.trim(), email.trim(), password);
-      navigate('/auctions');
+      navigate('/interests', { state: { onboarding: true } });
     } catch (err: any) {
       const details = err.response?.data?.error?.details as Array<{ message: string }> | undefined;
       setError(details?.[0]?.message || err.response?.data?.error?.message || err.message || 'Could not create your account.');

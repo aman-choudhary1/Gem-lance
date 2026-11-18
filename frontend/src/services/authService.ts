@@ -12,6 +12,14 @@ export const authService = {
     return res.data.data;
   },
 
+  async forgotPassword(email: string): Promise<void> {
+    await api.post('/auth/forgot-password', { email });
+  },
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    await api.post('/auth/reset-password', { token, password });
+  },
+
   async logout(): Promise<void> {
     await api.post('/auth/logout');
     localStorage.removeItem('auctionlens_access_token');

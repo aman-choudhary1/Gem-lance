@@ -14,6 +14,11 @@ import { EmptyState } from '../common/EmptyState';
 import { AuctionCardSkeleton } from '../common/SkeletonLoader';
 import { stagger } from '../motion/variants';
 import { AnimatedNumber } from '../motion/AnimatedNumber';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { CreateAlertModal } from '../alerts/CreateAlertModal';
+import { exportAuctionsCsv } from '../../utils/exportCsv';
+import { BellPlus, Download, Loader2 } from 'lucide-react';
 import { CalendarClock, Flame, FileText, Gavel, LayoutGrid, List, RefreshCw, Search, SlidersHorizontal, Sparkles, TrendingUp, Wallet, X } from 'lucide-react';
 
 type Mode = 'auctions' | 'bids';
@@ -76,6 +81,10 @@ export const ListingExplorer: React.FC<{ mode: Mode }> = ({ mode }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
   // ---- URL is the single source of truth for every filter
   const page = Math.max(1, numParam(searchParams.get('page')) ?? 1);
@@ -214,6 +223,36 @@ export const ListingExplorer: React.FC<{ mode: Mode }> = ({ mode }) => {
       patchParams({ status: undefined, sortBy: undefined, minPrice: undefined, maxPrice: undefined });
     } else {
       patchParams({ status: qp.patch.status, sortBy: qp.patch.sortBy, minPrice: qp.patch.minPrice, maxPrice: qp.patch.maxPrice });
+    }
+  };
+
+  const { data: sources = [] } = useQuery({ queryKey: ['sources'], queryFn: () => sourceService.getAllSources(), staleTime: 300000 });
+
+  // "Save as alert" needs something to match on; status and sort are not alert conditions.
+  const canSaveAlert = !!(search || filters.category || filters.state || filters.district || (!isBids && filters.source) || filters.minPrice !== undefined || filters.maxPrice !== undefined);
+
+  const openSaveAlert = () => {
+    if (!user) {
+      showToast({ type: 'info', title: 'Sign in to save alerts', message: 'We will notify you when new notices match this search.', actionUrl: '/login', actionLabel: 'Sign in' });
+      return;
+    }
+    setAlertOpen(true);
+  };
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const r = await exportAuctionsCsv(queryParams, isBids ? 'auctionlens-bids' : 'auctionlens-auctions');
+      showToast({
+        type: r.truncated ? 'warning' : 'success',
+        title: 'CSV downloaded',
+        message: r.truncated ? `Exported the first ${r.count.toLocaleString('en-IN')} of ${r.total.toLocaleString('en-IN')} results. Narrow the filters to export the rest.` : `${r.count.toLocaleString('en-IN')} notices exported.`
+      });
+    } catch {
+      showToast({ type: 'error', title: 'Export failed', message: 'Could not fetch the results. Please try again.' });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -415,6 +454,25 @@ export const ListingExplorer: React.FC<{ mode: Mode }> = ({ mode }) => {
               </span>{' '}
               {isBids ? 'bids' : 'auctions'} found
             </span>
+            <div className="flex items-center gap-2 ml-auto mr-3">
+              <button
+                type="button"
+                onClick={openSaveAlert}
+                disabled={!canSaveAlert}
+                title={canSaveAlert ? 'Get notified when new notices match this search' : 'Add a search or filter first'}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                <BellPlus className="w-3.5 h-3.5" /> Save as alert
+              </button>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting || !hasResults}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Export CSV
+              </button>
+            </div>
             <AnimatePresence>
               {isFetching && !isLoading && (
                 <m.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-300">
@@ -472,6 +530,26 @@ export const ListingExplorer: React.FC<{ mode: Mode }> = ({ mode }) => {
           )}
         </div>
       </div>
+
+      {alertOpen && (
+        <CreateAlertModal
+          isOpen
+          onClose={() => setAlertOpen(false)}
+          onCreated={() =>
+            showToast({ type: 'success', title: 'Alert saved', message: 'You will be notified when matching notices are published.', actionUrl: '/alerts', actionLabel: 'Manage alerts' })
+          }
+          categories={categories}
+          sources={sources}
+          initialValues={{
+            keywords: search || undefined,
+            sources: isBids ? ['GEM_BIDS'] : filters.source ? filters.source.split(',').map((s) => s.trim().toUpperCase()) : undefined,
+            category: categories.find((c) => c.slug === filters.category)?.id,
+            state: filters.state,
+            minPrice: filters.minPrice,
+            maxPrice: filters.maxPrice
+          }}
+        />
+      )}
 
       <FilterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={isBids ? 'Filter bids' : 'Filter auctions'} resultCount={total} onReset={resetAll} activeCount={activeFilterCount}>
         {filtersPanel}

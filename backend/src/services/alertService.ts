@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
+import { stateKey } from './locationService';
 
 export class AlertService {
   public async createAlert(userId: string, data: {
@@ -151,7 +152,8 @@ export async function matchAuctionWithAlerts(auctionId: string): Promise<number>
 
       // 3. State check
       if (isMatch && alert.state) {
-        if (!auction.location?.state || auction.location.state.toLowerCase() !== alert.state.toLowerCase()) {
+        // compare with the same normalisation as the state filter ("J&K" == "j & k", "&" == "and")
+        if (!auction.location?.state || stateKey(auction.location.state) !== stateKey(alert.state)) {
           isMatch = false;
         }
       }
@@ -205,11 +207,38 @@ export async function matchAuctionWithAlerts(auctionId: string): Promise<number>
       }
     }
 
+    // Users who chose this category as an interest (sign-up / settings) get a heads-up too.
+    if (auction.categoryId) {
+      const interested = await prisma.userInterest.findMany({
+        where: { categoryId: auction.categoryId, userId: { notIn: [...alreadyNotified] } },
+        select: { userId: true }
+      });
+      const categoryName = auction.category?.name ?? 'your categories';
+      const priceText = startPriceNum(auction.startPrice);
+      for (const { userId } of interested) {
+        await prisma.notification.create({
+          data: {
+            userId,
+            auctionId: auction.id,
+            type: 'NEW_MATCH',
+            title: `New in ${categoryName}: ${auction.title.substring(0, 60)}`,
+            message: `[${auction.source.code}] ${auction.externalId} was just published in ${categoryName}, a category you follow. ${priceText}`
+          }
+        });
+        alreadyNotified.add(userId);
+        matchedCount++;
+      }
+    }
+
     return matchedCount;
   } catch (error) {
     logger.error(`Error in alert matching engine: ${(error as Error).message}`);
     return 0;
   }
+}
+
+function startPriceNum(price: unknown): string {
+  return price !== null && price !== undefined ? `Starting price: ₹${Number(price).toLocaleString('en-IN')}` : 'Price not disclosed';
 }
 
 export const alertService = new AlertService();

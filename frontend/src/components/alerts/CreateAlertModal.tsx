@@ -11,6 +11,7 @@ interface CreateAlertModalProps {
   sources: AuctionSource[];
   initialValues?: {
     keywords?: string;
+    sources?: string[];
     category?: string;
     state?: string;
     minPrice?: number;
@@ -32,7 +33,7 @@ export const CreateAlertModal: React.FC<CreateAlertModalProps> = ({
       : 'New Forward Auction Alert'
   );
   const [keywords, setKeywords] = useState(initialValues?.keywords || '');
-  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedSources, setSelectedSources] = useState<string[]>(initialValues?.sources || []);
   const [categoryId, setCategoryId] = useState(initialValues?.category || '');
   const [state, setState] = useState(initialValues?.state || '');
   const [minPrice, setMinPrice] = useState<string>(

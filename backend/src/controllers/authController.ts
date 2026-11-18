@@ -81,6 +81,29 @@ export class AuthController {
     });
   }
 
+  public async forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await authService.requestPasswordReset(req.body.email);
+      res.status(200).json({
+        success: true,
+        data: { message: 'If an account exists for that email, a reset link is on its way.' }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await authService.resetPassword(req.body.token, req.body.password);
+      const { maxAge: _maxAge, ...clearOptions } = refreshCookieOptions;
+      res.clearCookie(REFRESH_COOKIE, clearOptions);
+      res.status(200).json({ success: true, data: { message: 'Password updated. Please sign in.' } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   public async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user) {

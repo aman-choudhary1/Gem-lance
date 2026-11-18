@@ -6,6 +6,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { SourceBadge } from '../components/common/SourceBadge';
+import { CgFullFetchModal } from '../components/admin/CgFullFetchModal';
 import {
   BarChart,
   Bar,
@@ -23,6 +24,7 @@ import {
   Layers,
   Database,
   RefreshCw,
+  DownloadCloud,
   Download,
   Search,
   ExternalLink,
@@ -43,7 +45,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 
 export const AnalyticsReportingPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const { showIngestionStart, showIngestionSuccess, showIngestionError } = useToast();
+  const { showIngestionStart, showIngestionSuccess, showIngestionError, showToast } = useToast();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -55,6 +57,7 @@ export const AnalyticsReportingPage: React.FC = () => {
   const [regionFilter, setRegionFilter] = useState<'ALL' | 'Central' | 'State' | 'Union Territory'>('ALL');
   const [activeOnly, setActiveOnly] = useState(false);
   const [syncingCode, setSyncingCode] = useState<string | null>(null);
+  const [fullFetchOpen, setFullFetchOpen] = useState(false);
   const [batchSyncing, setBatchSyncing] = useState(false);
 
   // 1. Fetch Analytics Report Data
@@ -76,9 +79,9 @@ export const AnalyticsReportingPage: React.FC = () => {
         } else {
           showIngestionSuccess(toastId, result, name);
         }
-        queryClient.invalidateQueries({ queryKey: ['analyticsReport'] });
-        queryClient.invalidateQueries({ queryKey: ['allSourcesPage'] });
-        queryClient.invalidateQueries({ queryKey: ['auctionsList'] });
+        // New data affects counts and lists across the whole app (home stats, state map, categories,
+        // bids, ending soon, discover tabs...), so refresh every query that is currently on screen.
+        queryClient.invalidateQueries();
         return result;
       } catch (err: any) {
         showIngestionError(toastId, code, err.response?.data?.error?.message || err.message || 'Ingestion failed');
@@ -119,7 +122,7 @@ export const AnalyticsReportingPage: React.FC = () => {
               : 'Priority Central & State Portals'
           );
         }
-        queryClient.invalidateQueries({ queryKey: ['analyticsReport'] });
+        queryClient.invalidateQueries();
       } catch (err: any) {
         showIngestionError(toastId, 'BATCH', err.response?.data?.error?.message || err.message || 'Batch sync failed');
       } finally {
@@ -549,6 +552,16 @@ export const AnalyticsReportingPage: React.FC = () => {
                         <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
                         {isSyncing ? 'Fetching...' : 'Fetch Live Now'}
                       </button>
+                      {site.code === 'CGSTATE' && (
+                        <button
+                          onClick={() => setFullFetchOpen(true)}
+                          title="The public list shows at most 50 tenders per department. Full fetch reads every open tender (you type the portal's code once)."
+                          className="mt-2 ml-auto flex w-max items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition shadow-sm bg-amber-500/10 hover:bg-amber-500 text-amber-700 dark:text-amber-300 hover:text-white border border-amber-500/30 hover:border-transparent"
+                        >
+                          <DownloadCloud className="w-3 h-3" />
+                          Full fetch (all)
+                        </button>
+                      )}
                     </td>
                     )}
                   </tr>
@@ -603,6 +616,19 @@ export const AnalyticsReportingPage: React.FC = () => {
           ))}
         </div>
       </div>
+      {fullFetchOpen && (
+        <CgFullFetchModal
+          onClose={() => setFullFetchOpen(false)}
+          onImported={(r) => {
+            queryClient.invalidateQueries();
+            showToast({
+              type: 'success',
+              title: 'Chhattisgarh full fetch complete',
+              message: `${r.recordsFound.toLocaleString('en-IN')} tenders read from ${r.pagesRead} pages: ${r.recordsCreated.toLocaleString('en-IN')} new, ${r.recordsUpdated.toLocaleString('en-IN')} updated.`
+            });
+          }}
+        />
+      )}
     </div>
   );
 };

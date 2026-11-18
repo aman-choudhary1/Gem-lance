@@ -13,6 +13,18 @@ import { logger } from '../../utils/logger';
 import { env } from '../../config/env';
 import { istToDate } from '../../utils/istDate';
 
+const HANDSHAKE_TIMEOUT_MS = 45000;
+const LIST_TIMEOUT_MS = 90000;
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 4000;
+
+/** Timeouts, resets and 5xx are worth another try; anything else (e.g. a 4xx or a parse bug) is not. */
+function isTransient(error: unknown): boolean {
+  const e = error as { code?: string; response?: { status?: number } };
+  if (e.response?.status) return e.response.status >= 500;
+  return ['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE'].includes(e.code ?? '') || /timeout/i.test((error as Error).message ?? '');
+}
+
 export class CgstateAuctionProvider implements AuctionDataProvider {
   public readonly sourceCode = 'CGSTATE';
   public readonly sourceName = 'Government of Chhattisgarh (CHiPS e-Procurement)';
@@ -26,7 +38,7 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
   constructor() {
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 35000,
+      timeout: HANDSHAKE_TIMEOUT_MS,
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -45,50 +57,65 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
   public async fetchAuctions(params?: FetchAuctionParams): Promise<RawAuction[]> {
     logger.info(`[CgstateProvider] Initiating Chhattisgarh live tender collection...`, { params });
 
-    try {
-      // 1. Handshake with getSignInAction.do to retrieve session cookie and OWASP CSRF token
-      const landingRes = await this.client.get('/CHEPS/security/getSignInAction.do');
-      const cookies = (landingRes.headers['set-cookie'] || [])
-        .map((c: string) => c.split(';')[0])
-        .join('; ');
-
-      const landingHtml = typeof landingRes.data === 'string' ? landingRes.data : '';
-      const csrfMatch =
-        landingHtml.match(/name=["']?OWASP_CSRFTOKEN["']?\s+value=["']?([A-Za-z0-9\-]+)["']?/i) ||
-        landingHtml.match(/OWASP_CSRFTOKEN=([A-Za-z0-9\-]+)/i);
-
-      const csrfToken = csrfMatch ? csrfMatch[1] : '';
-
-      logger.info(`[CgstateProvider] Handshake successful. Session established with CSRF token.`);
-
-      // 2. Submit official loadAlldata=Y payload to getSignInAction.do (loads all live active tenders)
-      const postPayload = querystring.stringify({
-        loadAlldata: 'Y',
-        OWASP_CSRFTOKEN: csrfToken,
-        pkiEnabledOrg: 'false'
-      });
-
-      const liveDataRes = await this.client.post('/CHEPS/security/getSignInAction.do', postPayload, {
-        headers: {
-          Cookie: cookies,
-          Referer: `${this.baseUrl}/CHEPS/security/getSignInAction.do`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      const liveHtml = typeof liveDataRes.data === 'string' ? liveDataRes.data : '';
-      const parsedTenders = this.parseLiveHtml(liveHtml);
-
-      this.lastSyncTime = new Date();
-      this.lastError = null;
-
-      logger.info(`[CgstateProvider] Successfully retrieved ${parsedTenders.length} active Chhattisgarh tenders.`);
-      return parsedTenders;
-    } catch (error) {
-      this.lastError = (error as Error).message;
-      logger.error(`[CgstateProvider] Scrape error: ${this.lastError}`);
-      throw error;
+    // The CHiPS portal stalls now and then (a request that normally takes ~3s can hang for minutes),
+    // so retry the whole session (cookie + CSRF token + list request) a few times before giving up.
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const tenders = await this.fetchOnce();
+        this.lastSyncTime = new Date();
+        this.lastError = null;
+        logger.info(`[CgstateProvider] Successfully retrieved ${tenders.length} active Chhattisgarh tenders (attempt ${attempt}).`);
+        return tenders;
+      } catch (error) {
+        lastErr = error;
+        const retryable = isTransient(error);
+        logger.warn(`[CgstateProvider] Attempt ${attempt}/${MAX_ATTEMPTS} failed: ${(error as Error).message}${retryable && attempt < MAX_ATTEMPTS ? ' - retrying' : ''}`);
+        if (!retryable || attempt === MAX_ATTEMPTS) break;
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+      }
     }
+
+    this.lastError = (lastErr as Error).message;
+    logger.error(`[CgstateProvider] Scrape error: ${this.lastError}`);
+    throw lastErr;
+  }
+
+  private async fetchOnce(): Promise<RawAuction[]> {
+    // 1. Handshake with getSignInAction.do to retrieve session cookie and OWASP CSRF token
+    const landingRes = await this.client.get('/CHEPS/security/getSignInAction.do');
+    const cookies = (landingRes.headers['set-cookie'] || [])
+      .map((c: string) => c.split(';')[0])
+      .join('; ');
+
+    const landingHtml = typeof landingRes.data === 'string' ? landingRes.data : '';
+    const csrfMatch =
+      landingHtml.match(/name=["']?OWASP_CSRFTOKEN["']?\s+value=["']?([A-Za-z0-9\-]+)["']?/i) ||
+      landingHtml.match(/OWASP_CSRFTOKEN=([A-Za-z0-9\-]+)/i);
+
+    const csrfToken = csrfMatch ? csrfMatch[1] : '';
+
+    logger.info(`[CgstateProvider] Handshake successful. Session established with CSRF token.`);
+
+    // 2. Submit official loadAlldata=Y payload to getSignInAction.do (loads all live active tenders).
+    // The response is ~2 MB of HTML, so it gets a longer timeout than the handshake.
+    const postPayload = querystring.stringify({
+      loadAlldata: 'Y',
+      OWASP_CSRFTOKEN: csrfToken,
+      pkiEnabledOrg: 'false'
+    });
+
+    const liveDataRes = await this.client.post('/CHEPS/security/getSignInAction.do', postPayload, {
+      timeout: LIST_TIMEOUT_MS,
+      headers: {
+        Cookie: cookies,
+        Referer: `${this.baseUrl}/CHEPS/security/getSignInAction.do`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    const liveHtml = typeof liveDataRes.data === 'string' ? liveDataRes.data : '';
+    return this.parseLiveHtml(liveHtml);
   }
 
   public async fetchAuctionDetails(externalId: string): Promise<RawAuctionDetail | null> {
@@ -129,6 +156,10 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
     if (!html) return tenders;
 
     const rowSegments = html.split(/<tr/i);
+    // Rows the portal lists vs rows we could parse, so silently skipped tenders show up in the log.
+    const listedRows = (html.match(/viewRfq\(/g) || []).length;
+    let skippedNoTitle = 0;
+    let skippedNoDueDate = 0;
     let currentDept = 'Government of Chhattisgarh';
 
     for (const segment of rowSegments) {
@@ -187,12 +218,18 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
           if (!isNaN(num) && num > 0) pac = num;
         }
 
-        if (!title || (!rfqId && !tenderNo)) continue;
+        if (!title || (!rfqId && !tenderNo)) {
+          skippedNoTitle++;
+          continue;
+        }
 
         const externalId = rfqId || tenderNo;
         const closingDate = this.parseCgDate(dueStr);
         // Skip tenders without a published due date rather than inventing one.
-        if (!closingDate) continue;
+        if (!closingDate) {
+          skippedNoDueDate++;
+          continue;
+        }
         const startingDate = this.parseCgDate(startStr) || new Date();
 
         const decodedTitle = decodeHtmlEntities(title);
@@ -244,6 +281,11 @@ export class CgstateAuctionProvider implements AuctionDataProvider {
       }
     }
 
+    if (listedRows !== tenders.length) {
+      logger.warn(
+        `[CgstateProvider] Portal listed ${listedRows} tenders, parsed ${tenders.length} (skipped: ${skippedNoTitle} without title/id, ${skippedNoDueDate} without due date)`
+      );
+    }
     return tenders;
   }
 

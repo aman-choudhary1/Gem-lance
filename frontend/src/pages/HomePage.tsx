@@ -14,6 +14,8 @@ import { PopularCategories } from '../components/dashboard/PopularCategories';
 import { DisclaimerBanner } from '../components/common/DisclaimerBanner';
 import { StatsTickerSkeleton } from '../components/common/SkeletonLoader';
 import { Reveal } from '../components/motion/Reveal';
+import { ForYouSection } from '../components/home/ForYouSection';
+import { IndiaTileMap } from '../components/map/IndiaTileMap';
 
 export const HomePage: React.FC = () => {
   const { data: stats, isLoading: isStatsLoading } = useQuery({
@@ -28,23 +30,32 @@ export const HomePage: React.FC = () => {
     staleTime: 300000
   });
 
+  const { data: states = [] } = useQuery({
+    queryKey: ['states'],
+    queryFn: () => sourceService.getStates(),
+    staleTime: 300000
+  });
+
   // Real lots shown as floating preview cards in the hero
   const { data: featured = [] } = useQuery({
     queryKey: ['heroFeatured'],
-    queryFn: () => auctionService.getEndingSoon(72, 2),
+    // sample (MOCK) notices never appear in the hero: it should only showcase real listings
+    queryFn: async () => (await auctionService.getEndingSoon(72, 12)).filter((a) => a.source.code !== 'MOCK').slice(0, 2),
     staleTime: 60000
   });
 
   return (
-    <div className="space-y-20 sm:space-y-28 pb-8">
+    <div className="space-y-12 sm:space-y-16 pb-6">
       <HeroSection totalSources={stats?.overview.totalSources} liveCount={stats?.overview.liveAuctions} featured={featured} />
 
-      <section className="-mt-10 sm:-mt-14 space-y-12">
+      <section className="-mt-8 sm:-mt-10 space-y-8">
         {isStatsLoading || !stats ? <StatsTickerSkeleton /> : <StatsTicker stats={stats.overview} />}
         <SourceMarquee />
       </section>
 
-      <section className="space-y-8">
+      <ForYouSection />
+
+      <section className="space-y-6">
         <SectionHeading
           eyebrow="Discover"
           title="Find what you came for, faster"
@@ -54,15 +65,24 @@ export const HomePage: React.FC = () => {
       </section>
 
       {categories.length > 0 && (
-        <section className="space-y-8">
+        <section className="space-y-6">
           <SectionHeading eyebrow="Browse" title="Shop by category" description="From scrap metal to vehicles and IT equipment, start with what you deal in." action={{ to: '/categories', label: 'All categories' }} />
           <PopularCategories categories={categories} />
         </section>
       )}
 
+      {states.length > 0 && (
+        <section className="space-y-6">
+          <SectionHeading eyebrow="Near you" title="Browse by state" description="Darker tiles have more notices. Tap a state to see what is on offer there." action={{ to: '/locations', label: 'All states' }} />
+          <Reveal>
+            <IndiaTileMap states={states} />
+          </Reveal>
+        </section>
+      )}
+
       <BidsSpotlight />
 
-      <section className="space-y-8">
+      <section className="space-y-6">
         <SectionHeading eyebrow="How it works" title="From notice to bid in three steps" align="center" />
         <HowItWorks />
       </section>

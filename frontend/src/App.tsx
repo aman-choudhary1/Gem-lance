@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
+import { CompareProvider } from './context/CompareContext';
 import { AppRoutes } from './routes/AppRoutes';
 import { LazyMotion, MotionConfig } from 'framer-motion';
 
@@ -28,7 +29,9 @@ export const App: React.FC = () => {
             <ThemeProvider>
               <AuthProvider>
                 <ToastProvider>
-                  <AppRoutes />
+                  <CompareProvider>
+                    <AppRoutes />
+                  </CompareProvider>
                 </ToastProvider>
               </AuthProvider>
             </ThemeProvider>

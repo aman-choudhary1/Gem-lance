@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { m } from 'framer-motion';
 import { sourceService } from '../services/sourceService';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Panel } from '../components/ui/Panel';
+import { IndiaTileMap } from '../components/map/IndiaTileMap';
 import { Stagger, StaggerItem } from '../components/motion/Reveal';
 import { useSpotlight } from '../hooks/useSpotlight';
 import { MapPin, ArrowRight, Search } from 'lucide-react';
@@ -44,6 +46,12 @@ export const LocationsPage: React.FC = () => {
           </label>
         }
       />
+
+      {!isLoading && states.length > 0 && (
+        <Panel title="Map view" icon={<MapPin className="w-4 h-4" />}>
+          <IndiaTileMap states={states} />
+        </Panel>
+      )}
 
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">

@@ -6,6 +6,7 @@ import { SourceBadge } from '../common/SourceBadge';
 import { CountdownTimer } from '../common/CountdownTimer';
 import { useAuth } from '../../context/AuthContext';
 import { useSaveAuction } from '../../hooks/useSaveAuction';
+import { CompareButton } from '../compare/CompareButton';
 import {
   formatCompactINR,
   formatDate,
@@ -107,6 +108,7 @@ export const AuctionTable: React.FC<AuctionTableProps> = ({ auctions }) => {
 
                 {/* Actions */}
                 <td className="py-4 px-4 align-top text-right space-x-2">
+                  <CompareButton auction={a} />
                   <button
                     onClick={() => toggle(a.id)}
                     aria-label={isSaved ? 'Remove from saved' : 'Save auction'}

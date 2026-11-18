@@ -37,66 +37,82 @@ enum ScrapeStatus {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  name          String
-  email         String         @unique
-  passwordHash  String
-  role          Role           @default(USER)
-  tokenVersion  Int            @default(0) // bumped on logout to revoke outstanding refresh tokens
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  tokenVersion Int      @default(0) // bumped on logout to revoke outstanding refresh tokens
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  savedAuctions SavedAuction[]
-  alerts        AuctionAlert[]
-  notifications Notification[]
+  savedAuctions  SavedAuction[]
+  alerts         AuctionAlert[]
+  notifications  Notification[]
+  passwordResets PasswordResetToken[]
+  interests      UserInterest[]
 
   @@map("users")
 }
 
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique // sha256 of the emailed token; the raw token is never stored
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
 model AuctionSource {
-  id          String      @id @default(cuid())
-  code        String      @unique // e.g. "GEM", "MSTC", "MOCK", "BANK", "PSU"
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g. "GEM", "MSTC", "MOCK", "BANK", "PSU"
   name        String
   baseUrl     String?
-  enabled     Boolean     @default(true)
+  enabled     Boolean  @default(true)
   description String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  auctions    Auction[]
-  scrapeJobs  ScrapeJob[]
+  auctions   Auction[]
+  scrapeJobs ScrapeJob[]
 
   @@map("auction_sources")
 }
 
 model Organization {
-  id          String    @id @default(cuid())
-  name        String
-  department  String?
-  source      String?   // Source portal identifier
-  externalId  String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String   @id @default(cuid())
+  name       String
+  department String?
+  source     String? // Source portal identifier
+  externalId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  auctions    Auction[]
+  auctions Auction[]
 
   @@unique([name, department])
   @@map("organizations")
 }
 
 model Location {
-  id        String    @id @default(cuid())
-  country   String    @default("India")
+  id        String   @id @default(cuid())
+  country   String   @default("India")
   state     String
   district  String?
   city      String?
   address   String?
   latitude  Float?
   longitude Float?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  auctions  Auction[]
+  auctions Auction[]
 
   @@index([state])
   @@index([district])
@@ -113,50 +129,51 @@ model Category {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  auctions  Auction[]
+  auctions        Auction[]
+  interestedUsers UserInterest[]
 
   @@index([slug])
   @@map("categories")
 }
 
 model Auction {
-  id             String          @id @default(cuid())
-  sourceId       String
-  source         AuctionSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  externalId     String          // Source portal specific auction ID, e.g. "GEM/FA/2026/12345"
-  title          String
-  description    String?         @db.Text
-  
+  id          String        @id @default(cuid())
+  sourceId    String
+  source      AuctionSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId  String // Source portal specific auction ID, e.g. "GEM/FA/2026/12345"
+  title       String
+  description String?       @db.Text
+
   organizationId String?
-  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
-  categoryId     String?
-  category       Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  locationId     String?
-  location       Location?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
-  status         AuctionStatus   @default(UPCOMING)
-  sourceStatus   String?         // Original raw status from portal
-  
-  startPrice     Decimal?        @db.Decimal(14, 2) // null = not disclosed by the source portal
-  emdAmount      Decimal?        @db.Decimal(14, 2)
-  bidIncrement   Decimal?        @db.Decimal(14, 2)
+  status       AuctionStatus @default(UPCOMING)
+  sourceStatus String? // Original raw status from portal
 
-  startTime      DateTime
-  endTime        DateTime
+  startPrice   Decimal? @db.Decimal(14, 2) // null = not disclosed by the source portal
+  emdAmount    Decimal? @db.Decimal(14, 2)
+  bidIncrement Decimal? @db.Decimal(14, 2)
 
-  officialUrl    String?         // Link to official source page
-  rawData        Json?           // Full source-specific raw JSON payload
-  
-  lastScrapedAt  DateTime        @default(now())
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  startTime DateTime
+  endTime   DateTime
 
-  items          AuctionItem[]
-  documents      AuctionDocument[]
-  savedByUsers   SavedAuction[]
-  notifications  Notification[]
+  officialUrl String? // Link to official source page
+  rawData     Json? // Full source-specific raw JSON payload
+
+  lastScrapedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items         AuctionItem[]
+  documents     AuctionDocument[]
+  savedByUsers  SavedAuction[]
+  notifications Notification[]
 
   @@unique([sourceId, externalId])
   @@index([sourceId])
@@ -172,31 +189,31 @@ model Auction {
 }
 
 model AuctionItem {
-  id             String    @id @default(cuid())
+  id             String   @id @default(cuid())
   auctionId      String
-  auction        Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  auction        Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
   name           String
-  description    String?   @db.Text
-  quantity       Decimal   @default(1) @db.Decimal(10, 2)
-  unit           String?   @default("Nos")
-  condition      String?   // e.g. "Used", "As Is Where Is", "Surplus", "Refurbished"
-  estimatedValue Decimal?  @db.Decimal(14, 2)
+  description    String?  @db.Text
+  quantity       Decimal  @default(1) @db.Decimal(10, 2)
+  unit           String?  @default("Nos")
+  condition      String? // e.g. "Used", "As Is Where Is", "Surplus", "Refurbished"
+  estimatedValue Decimal? @db.Decimal(14, 2)
   metadata       Json?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([auctionId])
   @@map("auction_items")
 }
 
 model AuctionDocument {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   auctionId    String
-  auction      Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  auction      Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
   name         String
-  documentType String?   // "TENDER_NOTICE", "TERMS_CONDITIONS", "CATALOG", "IMAGE"
+  documentType String? // "TENDER_NOTICE", "TERMS_CONDITIONS", "CATALOG", "IMAGE"
   url          String
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
 
   @@index([auctionId])
   @@map("auction_documents")
@@ -218,20 +235,20 @@ model SavedAuction {
 }
 
 model AuctionAlert {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name        String
-  keywords    String?  // comma-separated or text keywords
-  sourceIds   String[] @default([]) // Array of source IDs or codes
-  categoryId  String?
-  state       String?
-  district    String?
-  minPrice    Decimal? @db.Decimal(14, 2)
-  maxPrice    Decimal? @db.Decimal(14, 2)
-  enabled     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keywords   String? // comma-separated or text keywords
+  sourceIds  String[] @default([]) // Array of source IDs or codes
+  categoryId String?
+  state      String?
+  district   String?
+  minPrice   Decimal? @db.Decimal(14, 2)
+  maxPrice   Decimal? @db.Decimal(14, 2)
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([userId])
   @@index([enabled])
@@ -271,4 +288,20 @@ model ScrapeJob {
   @@index([status])
   @@index([startedAt])
   @@map("scrape_jobs")
+}
+
+/// A category the user said they deal in (chosen at sign-up or in settings). Drives new-notice
+/// notifications and the "Picked for you" feed.
+model UserInterest {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@index([categoryId])
+  @@map("user_interests")
 }

@@ -21,7 +21,9 @@ export const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
 
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
+  const locState = location.state as { from?: { pathname?: string }; notice?: string } | null;
+  const from = locState?.from?.pathname || '/';
+  const notice = locState?.notice;
 
   const fail = (message: string) => {
     setError(message);
@@ -87,6 +89,12 @@ export const LoginPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {notice && (
+        <div role="status" className="mb-5 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-sm">
+          {notice}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5" noValidate={false}>
         <AuthField
           ref={emailRef}
@@ -129,6 +137,12 @@ export const LoginPage: React.FC = () => {
           }
           hint={capsOn ? <span className="text-amber-600 dark:text-amber-400 font-medium">Caps Lock is on</span> : undefined}
         />
+
+        <div className="-mt-2 text-right">
+          <Link to="/forgot-password" className="text-sm font-medium text-emerald-600 dark:text-emerald-300 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
 
         <m.button whileTap={{ scale: 0.98 }} type="submit" disabled={isLoading || !email || !password} className="btn-primary w-full !py-3.5 !text-[15px] !rounded-2xl">
           {isLoading ? (

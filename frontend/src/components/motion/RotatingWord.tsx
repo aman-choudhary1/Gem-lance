@@ -21,7 +21,7 @@ export const RotatingWord: React.FC<RotatingWordProps> = ({ words, interval = 26
   const longest = words.reduce((a, b) => (b.length > a.length ? b : a), '');
 
   return (
-    <span className="relative inline-grid align-bottom overflow-hidden" aria-live="polite">
+    <span className="relative inline-grid justify-items-center align-bottom overflow-hidden" aria-live="polite">
       {/* invisible sizer so the layout never jumps */}
       <span className="invisible col-start-1 row-start-1 whitespace-nowrap" aria-hidden>
         {longest}

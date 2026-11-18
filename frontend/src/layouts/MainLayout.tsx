@@ -5,6 +5,7 @@ import { ArrowUp } from 'lucide-react';
 import { Navbar } from '../components/common/Navbar';
 import { Footer } from '../components/common/Footer';
 import { ScrollProgress } from '../components/motion/ScrollProgress';
+import { CompareTray } from '../components/compare/CompareTray';
 
 /** Scroll to the top on page navigation (but not when only the query string changes, e.g. filters). */
 const ScrollToTop: React.FC = () => {
@@ -90,6 +91,7 @@ export const MainLayout: React.FC = () => {
       </main>
       <Footer />
       <BackToTop />
+      <CompareTray />
     </div>
   );
 };

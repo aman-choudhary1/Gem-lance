@@ -8,6 +8,7 @@ import adminRoutes from './adminRoutes';
 import sourceRoutes from './sourceRoutes';
 import categoryRoutes from './categoryRoutes';
 import locationRoutes from './locationRoutes';
+import interestRoutes from './interestRoutes';
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.use('/admin', adminRoutes);
 router.use('/sources', sourceRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/locations', locationRoutes);
+router.use('/interests', interestRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {

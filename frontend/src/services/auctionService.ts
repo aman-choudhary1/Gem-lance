@@ -1,6 +1,8 @@
 import { api } from './api';
 import { Auction, PaginatedResponse, DashboardStats } from '../types';
 
+export type ForYouAuction = Auction & { reason: { type: 'alert' | 'interest' | 'saved'; label: string } };
+
 export interface AuctionSearchParams {
   page?: number;
   limit?: number;
@@ -38,6 +40,11 @@ export const auctionService = {
       params: { hours, limit, source, category }
     });
     return res.data.data;
+  },
+
+  async getForYou(limit = 12): Promise<{ data: ForYouAuction[]; hasAlerts: boolean; hasInterests: boolean; hasSaved: boolean }> {
+    const res = await api.get('/auctions/for-you', { params: { limit } });
+    return { data: res.data.data, hasAlerts: res.data.hasAlerts, hasInterests: res.data.hasInterests, hasSaved: res.data.hasSaved };
   },
 
   async getStats(): Promise<DashboardStats> {

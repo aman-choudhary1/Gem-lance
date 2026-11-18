@@ -55,10 +55,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ totalSources, liveCoun
       </div>
 
       {/* floating real-data preview cards (wide screens only) */}
-      {a && <FloatingLot auction={a} className="hidden 2xl:block absolute left-8 top-32 w-64 animate-float-slow" />}
-      {b && <FloatingLot auction={b} className="hidden 2xl:block absolute right-8 top-48 w-64 animate-float [animation-delay:-2.5s]" />}
+      {a && <FloatingLot auction={a} className="hidden 2xl:block absolute left-6 top-44 w-56 animate-float-slow" />}
+      {b && <FloatingLot auction={b} className="hidden 2xl:block absolute right-6 top-64 w-56 animate-float [animation-delay:-2.5s]" />}
 
-      <m.div variants={stagger(0.09, 0.05)} initial="hidden" animate="show" className="relative px-5 sm:px-10 pt-14 sm:pt-20 pb-20 sm:pb-24 max-w-4xl mx-auto text-center">
+      <m.div variants={stagger(0.09, 0.05)} initial="hidden" animate="show" className="relative px-5 sm:px-10 pt-12 sm:pt-16 pb-16 sm:pb-20 max-w-4xl mx-auto text-center">
         <m.div variants={fadeUp} className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-300 backdrop-blur">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
@@ -69,13 +69,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ totalSources, liveCoun
           {liveCount ? <span>{liveCount.toLocaleString('en-IN')} live now</span> : null}
         </m.div>
 
-        <m.h1 variants={fadeUp} className="mt-6 text-[1.95rem] leading-[1.1] sm:text-6xl font-extrabold text-slate-900 dark:text-white">
-          Find government{' '}
-          <span className="block sm:inline">
-            <RotatingWord words={WORDS} className="text-gradient pb-1" />
-          </span>{' '}
-          auctions
-          <span className="block">& bids across India</span>
+        <m.h1 variants={fadeUp} className="mt-7 font-extrabold tracking-tight text-slate-900 dark:text-white">
+          <span className="block text-[2.1rem] sm:text-5xl lg:text-6xl leading-[1.08]">Find government</span>
+          <span className="block text-[2.6rem] sm:text-6xl lg:text-7xl leading-[1.12] mt-0.5 sm:mt-1">
+            <RotatingWord words={WORDS} className="text-gradient pb-2" />
+          </span>
+          <span className="block mt-2 sm:mt-3 text-lg sm:text-2xl lg:text-3xl font-semibold tracking-normal text-slate-600 dark:text-slate-300">
+            auctions &amp; bids across India
+          </span>
         </m.h1>
 
         <m.p variants={fadeUp} className="mt-5 text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">

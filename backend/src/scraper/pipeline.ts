@@ -5,6 +5,7 @@ import { upsertAuction } from './deduplicator';
 import { matchAuctionWithAlerts } from '../services/alertService';
 import { logger } from '../utils/logger';
 import { AppError } from '../middleware/errorHandler';
+import { RawAuction } from '../types/provider';
 
 export interface PipelineSummary {
   sourceCode: string;
@@ -20,20 +21,24 @@ export interface PipelineSummary {
 
 const runningSources = new Set<string>();
 
-export async function runScraperPipeline(sourceCode: string): Promise<PipelineSummary> {
+/**
+ * @param fetcher optional replacement for `provider.fetchAuctions()`, e.g. an admin-assisted full
+ *   fetch. Everything else (job record, per-source lock, normalise, upsert, alert matching) is shared.
+ */
+export async function runScraperPipeline(sourceCode: string, fetcher?: () => Promise<RawAuction[]>): Promise<PipelineSummary> {
   const upperCode = sourceCode.toUpperCase();
   if (runningSources.has(upperCode)) {
     throw new AppError(`Ingestion for [${upperCode}] is already running`, 409, 'SYNC_IN_PROGRESS');
   }
   runningSources.add(upperCode);
   try {
-    return await runScraperPipelineUnlocked(upperCode);
+    return await runScraperPipelineUnlocked(upperCode, fetcher);
   } finally {
     runningSources.delete(upperCode);
   }
 }
 
-async function runScraperPipelineUnlocked(upperCode: string): Promise<PipelineSummary> {
+async function runScraperPipelineUnlocked(upperCode: string, fetcher?: () => Promise<RawAuction[]>): Promise<PipelineSummary> {
   const startTime = Date.now();
   logger.info(`[Pipeline] Starting data ingestion pipeline for source: [${upperCode}]`);
 
@@ -89,7 +94,7 @@ async function runScraperPipelineUnlocked(upperCode: string): Promise<PipelineSu
 
   try {
     // 3. Fetch raw auction batch
-    const rawAuctions = await provider.fetchAuctions();
+    const rawAuctions = fetcher ? await fetcher() : await provider.fetchAuctions();
     recordsFound = rawAuctions.length;
     logger.info(`[Pipeline] Provider [${upperCode}] returned ${recordsFound} records.`);
 
